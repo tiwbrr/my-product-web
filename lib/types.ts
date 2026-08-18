@@ -1,0 +1,37 @@
+export type Role = "user" | "admin";
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  role: Role;
+  createdAt: string;
+};
+
+export type SafeUser = Omit<User, "passwordHash">;
+
+export type Session = {
+  tokenHash: string;
+  userId: string;
+  expiresAt: string;
+};
+
+export type Product = {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  price: number;
+  stock: number;
+  images: string[];
+  featured: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StoreSettings = {
+  lineQrImage: string;
+  facebookUrl: string;
+  updatedAt: string;
+};

@@ -1,4 +1,17 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is a Next.js storefront backed by Supabase Postgres.
+
+## Supabase setup
+
+1. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL` and
+   `SUPABASE_SECRET_KEY` (or the legacy `SUPABASE_SERVICE_ROLE_KEY`). Never
+   expose the secret key to browser code.
+2. Apply `supabase/migrations/20260818000000_create_store_tables.sql` in the
+   Supabase SQL editor.
+3. Import the existing JSON data once with `npm run db:migrate-data`.
+
+The import is idempotent. After it succeeds, users, sessions, and products are
+read from and written to Supabase; `data/store.json` is retained only as the
+original migration source.
 
 ## Getting Started
 

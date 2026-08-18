@@ -1,69 +1,33 @@
-import Image from "next/image";
+import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth";
+import { getProducts, getStoreSettings } from "@/lib/store";
+import { ContactSection } from "@/app/ui/contact-section";
+import { StoreHeader } from "@/app/ui/store-header";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const [products, user, settings] = await Promise.all([
+    getProducts(),
+    getCurrentUser(),
+    getStoreSettings(),
+  ]);
+
+  return <main>
+    <StoreHeader user={user} />
+    <section className="hero">
+      <div className="hero-copy"><span className="eyebrow">EVERYDAY ESSENTIALS · 2026</span><h1>ของดีที่เลือกมา<br />ให้ทุกวันของคุณ</h1><p>สินค้าดีไซน์เรียบ คุณภาพดี ใช้งานได้จริง—คัดสรรทีละชิ้นเพื่อให้คุณเลือกซื้อได้อย่างสบายใจ</p><a className="button button-dark" href="#products">เลือกดูสินค้า <span>↓</span></a></div>
+      <div className="hero-art" aria-hidden="true"><div className="hero-stamp">CURATED<br /><strong>WITH CARE</strong></div><div className="hero-card hero-card-back"><span>QUALITY</span></div><div className="hero-card hero-card-front"><span>MY STORE</span><b>Simple goods.<br />Better days.</b></div></div>
+    </section>
+    <section className="product-section" id="products">
+      <div className="section-heading"><div><span className="eyebrow">OUR COLLECTION</span><h2>สินค้าทั้งหมด</h2></div><p>{products.length} รายการที่คัดสรรมาเพื่อคุณ</p></div>
+      {products.length ? <div className="product-grid">{products.map((product, index) => <article className="product-card" key={product.id}>
+        <Link href={`/products/${product.id}`} className="product-image-wrap">{product.images[0] ? <img src={product.images[0]} alt={product.name} className="product-image" /> : <div className={`product-placeholder tone-${index % 3}`}><span>{product.category}</span></div>}{product.featured && <span className="product-badge">แนะนำ</span>}{product.images.length > 1 && <span className="image-count">{product.images.length} รูป</span>}</Link>
+        <div className="product-info"><div className="product-meta"><span>{product.category}</span><span>{product.stock > 0 ? `เหลือ ${product.stock} ชิ้น` : "สินค้าหมด"}</span></div><h3><Link href={`/products/${product.id}`}>{product.name}</Link></h3><p>{product.description}</p><div className="product-bottom"><strong>฿{product.price.toLocaleString("th-TH")}</strong><Link href={`/products/${product.id}`}>ดูรายละเอียด →</Link></div></div>
+      </article>)}</div> : <div className="empty-state"><span>◌</span><h3>กำลังเตรียมสินค้าใหม่</h3><p>แอดมินสามารถเพิ่มสินค้าชิ้นแรกได้จากหน้าจัดการ</p>{user?.role === "admin" && <Link className="button button-dark" href="/admin">เพิ่มสินค้า</Link>}</div>}
+    </section>
+    <ContactSection settings={settings} />
+    <section className="member-banner"><div><span className="eyebrow">MY STORE MEMBER</span><h2>เป็นสมาชิก แล้วติดตามร้านได้ง่ายกว่า</h2><p>สมัครฟรี เก็บข้อมูลบัญชีของคุณไว้สำหรับสิทธิประโยชน์และฟีเจอร์ใหม่ในอนาคต</p></div>{!user && <Link href="/register" className="button button-light">สมัครสมาชิกฟรี →</Link>}</section>
+    <footer><Link href="/" className="brand brand-light"><span>M</span> MY STORE</Link><p>© 2026 My Store. Simple goods, better days.</p></footer>
+  </main>;
 }
