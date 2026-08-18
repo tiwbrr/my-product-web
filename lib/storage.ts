@@ -25,7 +25,7 @@ async function ensureBucket() {
   return bucketReady;
 }
 
-export async function uploadImage(file: File, folder: "products" | "contacts") {
+export async function uploadImage(file: File, folder: "products" | "contacts" | "categories") {
   const extension = allowedTypes.get(file.type);
   if (!extension) throw new Error("รองรับรูป JPG, PNG และ WebP เท่านั้น");
   if (file.size > 4 * 1024 * 1024) throw new Error("รูปภาพต้องมีขนาดไม่เกิน 4 MB");

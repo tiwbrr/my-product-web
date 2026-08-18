@@ -14,7 +14,7 @@ export function ContactSection({ settings }: { settings: StoreSettings }) {
   if (!settings.lineQrImage && !settings.facebookUrl) return null;
   return <>
     <section className="contact-section" id="contact">
-      <div><span className="eyebrow">CONTACT US</span><h2>ช่องทางติดต่อ</h2><p>สอบถามรายละเอียดสินค้าและพูดคุยกับเราได้โดยตรง</p></div>
+      <div><span className="eyebrow">CONTACT US</span><h2>ช่องทางติดต่อ</h2><p>สอบถามรายละเอียดไอดีเกมและพูดคุยกับร้านได้โดยตรง</p></div>
       <div className="contact-actions">
         {settings.lineQrImage && <button className="contact-card contact-line" onClick={() => setShowLineQr(true)}><span>LINE</span><b>เปิด QR Code</b><small>กดเพื่อสแกนเพิ่มเพื่อน</small></button>}
         {settings.facebookUrl && <a className="contact-card contact-facebook" href={settings.facebookUrl} target="_blank" rel="noreferrer"><span>FACEBOOK</span><b>ไปที่หน้า Facebook</b><small>เปิดลิงก์ในแท็บใหม่ ↗</small></a>}

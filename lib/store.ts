@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { Product, Session, StoreSettings, User } from "@/lib/types";
+import type { GameCategory, Product, Session, StoreSettings, User } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -36,6 +36,13 @@ type StoreSettingsRow = {
   line_qr_image: string;
   facebook_url: string;
   updated_at: string;
+};
+
+type GameCategoryRow = {
+  id: string;
+  name: string;
+  icon: string;
+  sort_order: number;
 };
 
 function databaseError(operation: string, error: { message: string; code?: string }) {
@@ -233,4 +240,67 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
   if (error) throw databaseError("saveStoreSettings", error);
   const row = data as StoreSettingsRow;
   return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, updatedAt: row.updated_at };
+}
+
+const fallbackGameCategories: GameCategory[] = [
+  { id: "genshin", name: "Genshin", icon: "", sortOrder: 1 },
+  { id: "wuthering-wave", name: "Wuthering Wave", icon: "", sortOrder: 2 },
+];
+
+function toGameCategory(row: GameCategoryRow): GameCategory {
+  return { id: row.id, name: row.name, icon: row.icon, sortOrder: row.sort_order };
+}
+
+export async function getGameCategories(): Promise<GameCategory[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("game_categories")
+    .select("id, name, icon, sort_order")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (error?.code === "PGRST205" || error?.code === "42P01") return fallbackGameCategories;
+  if (error) throw databaseError("getGameCategories", error);
+  return data?.length ? (data as GameCategoryRow[]).map(toGameCategory) : fallbackGameCategories;
+}
+
+export async function addGameCategory(category: GameCategory): Promise<GameCategory> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("game_categories")
+    .insert({ id: category.id, name: category.name, icon: category.icon, sort_order: category.sortOrder })
+    .select("id, name, icon, sort_order")
+    .single();
+  if (error?.code === "23505") throw new Error("DUPLICATE_CATEGORY", { cause: error });
+  if (error) throw databaseError("addGameCategory", error);
+  return toGameCategory(data as GameCategoryRow);
+}
+
+export async function getGameCategory(id: string): Promise<GameCategory | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("game_categories")
+    .select("id, name, icon, sort_order")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw databaseError("getGameCategory", error);
+  return data ? toGameCategory(data as GameCategoryRow) : null;
+}
+
+export async function updateGameCategoryIcon(id: string, icon: string): Promise<GameCategory> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("game_categories")
+    .update({ icon })
+    .eq("id", id)
+    .select("id, name, icon, sort_order")
+    .single();
+  if (error) throw databaseError("updateGameCategoryIcon", error);
+  return toGameCategory(data as GameCategoryRow);
+}
+
+export async function removeGameCategory(id: string): Promise<GameCategory | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("game_categories")
+    .delete()
+    .eq("id", id)
+    .select("id, name, icon, sort_order")
+    .maybeSingle();
+  if (error) throw databaseError("removeGameCategory", error);
+  return data ? toGameCategory(data as GameCategoryRow) : null;
 }

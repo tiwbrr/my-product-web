@@ -1,15 +1,33 @@
+"use client";
+
 import Link from "next/link";
-import type { SafeUser } from "@/lib/types";
+import { useEffect, useState } from "react";
 import { logoutAction } from "@/app/actions/auth";
+import type { SafeUser } from "@/lib/types";
 
 export function StoreHeader({ user }: { user: SafeUser | null }) {
-  return (
-    <header className="site-header">
-      <Link href="/" className="brand"><span>M</span> MY STORE</Link>
-      <nav aria-label="เมนูหลัก"><Link href="/#featured">สินค้าแนะนำ</Link><Link href="/#all-products">สินค้าทั้งหมด</Link><Link href="/#about">เกี่ยวกับเรา</Link><Link href="/#contact">ติดต่อเรา</Link>{user?.role === "admin" && <Link href="/admin">จัดการร้าน</Link>}</nav>
-      <div className="header-actions">
-        {user ? <><Link href="/account" className="account-pill"><span>{user.name.charAt(0)}</span><b>{user.name}</b></Link><form action={logoutAction}><button className="text-button">ออกจากระบบ</button></form></> : <><Link href="/login" className="text-button">เข้าสู่ระบบ</Link><Link href="/register" className="button button-small button-dark">สมัครสมาชิก</Link></>}
-      </div>
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", close);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", close); document.body.style.overflow = ""; };
+  }, [open]);
+  const closeMenu = () => setOpen(false);
+  return <>
+    <header className="game-header">
+      <Link href="/#categories" className="game-header-category">หมวดหมู่เกม</Link>
+      <Link href="/" className="game-brand"><span>S</span><b>SELL ID</b></Link>
+      <button className="hamburger-button" onClick={() => setOpen(true)} aria-label="เปิดเมนู" aria-expanded={open}><i></i><i></i><i></i></button>
     </header>
-  );
+    {open && <div className="menu-overlay" onMouseDown={(event) => { if (event.currentTarget === event.target) closeMenu(); }}>
+      <aside className="menu-drawer" aria-label="เมนูหลัก">
+        <div className="menu-drawer-head"><span>MENU</span><button onClick={closeMenu} aria-label="ปิดเมนู">×</button></div>
+        <nav><Link href="/" onClick={closeMenu}><span>01</span>หน้าหลัก</Link><Link href="/#categories" onClick={closeMenu}><span>02</span>หมวดหมู่เกม</Link><Link href="/#products" onClick={closeMenu}><span>03</span>รายการไอดีทั้งหมด</Link><Link href="/#contact" onClick={closeMenu}><span>04</span>ติดต่อร้านค้า</Link>{user?.role === "admin" && <Link href="/admin" onClick={closeMenu}><span>05</span>จัดการร้าน</Link>}</nav>
+        <div className="menu-account">{user ? <><Link href="/account" onClick={closeMenu}>บัญชีของ {user.name}</Link><form action={logoutAction}><button>ออกจากระบบ</button></form></> : <><Link href="/login" onClick={closeMenu}>เข้าสู่ระบบ</Link><Link href="/register" onClick={closeMenu}>สมัครสมาชิก</Link></>}</div>
+        <small>SELL ID · GAME ACCOUNT STORE</small>
+      </aside>
+    </div>}
+  </>;
 }

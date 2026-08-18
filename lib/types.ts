@@ -35,3 +35,10 @@ export type StoreSettings = {
   facebookUrl: string;
   updatedAt: string;
 };
+
+export type GameCategory = {
+  id: string;
+  name: string;
+  icon: string;
+  sortOrder: number;
+};
