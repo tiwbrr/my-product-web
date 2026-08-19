@@ -36,7 +36,16 @@ export type Product = {
 export type StoreSettings = {
   lineQrImage: string;
   facebookUrl: string;
+  youtubePlaylistUrl: string;
   updatedAt: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  userId: string;
+  userName: string;
+  message: string;
+  createdAt: string;
 };
 
 export type GameCategory = {

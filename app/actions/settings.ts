@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { getStoreSettings, saveStoreSettings } from "@/lib/store";
 import { removeImage, uploadImage } from "@/lib/storage";
+import { normalizeYouTubePlaylistUrl } from "@/lib/youtube";
 
 export type SettingsState = { error: string; success?: string };
 
@@ -19,6 +20,8 @@ export async function saveContactSettingsAction(
   await requireAdmin();
   const current = await getStoreSettings();
   const facebookUrl = text(formData, "facebookUrl");
+  const youtubePlaylistInput = text(formData, "youtubePlaylistUrl");
+  const normalizedYouTubePlaylistUrl = youtubePlaylistInput ? normalizeYouTubePlaylistUrl(youtubePlaylistInput) : null;
   if (facebookUrl) {
     try {
       const parsed = new URL(facebookUrl);
@@ -27,6 +30,10 @@ export async function saveContactSettingsAction(
       return { error: "กรุณาใส่ลิงก์ Facebook แบบเต็ม เช่น https://facebook.com/ชื่อเพจ" };
     }
   }
+  if (youtubePlaylistInput && !normalizedYouTubePlaylistUrl) {
+    return { error: "กรุณาใส่ลิงก์ YouTube Playlist ที่มีรหัส list เช่น https://www.youtube.com/playlist?list=..." };
+  }
+  const youtubePlaylistUrl = normalizedYouTubePlaylistUrl ?? "";
 
   const file = formData.get("lineQrImage");
   const removeCurrent = formData.get("removeLineQr") === "on";
@@ -40,6 +47,7 @@ export async function saveContactSettingsAction(
     await saveStoreSettings({
       lineQrImage,
       facebookUrl,
+      youtubePlaylistUrl,
       updatedAt: new Date().toISOString(),
     });
     if (current.lineQrImage && current.lineQrImage !== lineQrImage) {

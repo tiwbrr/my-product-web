@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, GameCategory, Product, Session, StoreSettings, User } from "@/lib/types";
+import type { AccountGender, ChatMessage, GameCategory, Product, Session, StoreSettings, User } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -36,7 +36,16 @@ type ProductRow = {
 type StoreSettingsRow = {
   line_qr_image: string;
   facebook_url: string;
+  youtube_playlist_url: string;
   updated_at: string;
+};
+
+type ChatMessageRow = {
+  id: string;
+  user_id: string;
+  message: string;
+  created_at: string;
+  store_users: { name: string } | { name: string }[] | null;
 };
 
 type GameCategoryRow = {
@@ -216,17 +225,17 @@ export async function getMemberCount(): Promise<number> {
 export async function getStoreSettings(): Promise<StoreSettings> {
   const { data, error } = await getSupabaseAdmin()
     .from("store_settings")
-    .select("line_qr_image, facebook_url, updated_at")
+    .select("line_qr_image, facebook_url, youtube_playlist_url, updated_at")
     .eq("id", 1)
     .maybeSingle();
   if (error?.code === "PGRST205" || error?.code === "42P01") {
-    return { lineQrImage: "", facebookUrl: "", updatedAt: "" };
+    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "" };
   }
   if (error) throw databaseError("getStoreSettings", error);
   const row = data as StoreSettingsRow | null;
   return row
-    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, updatedAt: row.updated_at }
-    : { lineQrImage: "", facebookUrl: "", updatedAt: "" };
+    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at }
+    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "" };
 }
 
 export async function saveStoreSettings(settings: StoreSettings): Promise<StoreSettings> {
@@ -236,13 +245,53 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
       id: 1,
       line_qr_image: settings.lineQrImage,
       facebook_url: settings.facebookUrl,
+      youtube_playlist_url: settings.youtubePlaylistUrl,
       updated_at: settings.updatedAt,
     })
-    .select("line_qr_image, facebook_url, updated_at")
+    .select("line_qr_image, facebook_url, youtube_playlist_url, updated_at")
     .single();
   if (error) throw databaseError("saveStoreSettings", error);
   const row = data as StoreSettingsRow;
-  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, updatedAt: row.updated_at };
+  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at };
+}
+
+const chatRetentionMilliseconds = 7 * 24 * 60 * 60 * 1000;
+
+export async function removeExpiredChatMessages(): Promise<void> {
+  const cutoff = new Date(Date.now() - chatRetentionMilliseconds).toISOString();
+  const { error } = await getSupabaseAdmin().from("chat_messages").delete().lt("created_at", cutoff);
+  if (error) throw databaseError("removeExpiredChatMessages", error);
+}
+
+export async function getChatMessages(): Promise<ChatMessage[]> {
+  await removeExpiredChatMessages();
+  const cutoff = new Date(Date.now() - chatRetentionMilliseconds).toISOString();
+  const { data, error } = await getSupabaseAdmin()
+    .from("chat_messages")
+    .select("id, user_id, message, created_at, store_users(name)")
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: true });
+  if (error) throw databaseError("getChatMessages", error);
+  return (data as ChatMessageRow[]).map((row) => {
+    const relatedUser = Array.isArray(row.store_users) ? row.store_users[0] : row.store_users;
+    return {
+      id: row.id,
+      userId: row.user_id,
+      userName: relatedUser?.name ?? "สมาชิก",
+      message: row.message,
+      createdAt: row.created_at,
+    };
+  });
+}
+
+export async function addChatMessage(message: Omit<ChatMessage, "userName">): Promise<void> {
+  const { error } = await getSupabaseAdmin().from("chat_messages").insert({
+    id: message.id,
+    user_id: message.userId,
+    message: message.message,
+    created_at: message.createdAt,
+  });
+  if (error) throw databaseError("addChatMessage", error);
 }
 
 const fallbackGameCategories: GameCategory[] = [
