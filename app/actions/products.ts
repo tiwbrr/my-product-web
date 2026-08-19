@@ -5,11 +5,10 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { getProduct, removeProduct, saveProduct } from "@/lib/store";
 import { removeImage, uploadImage } from "@/lib/storage";
+import { MAX_PRODUCT_IMAGES } from "@/lib/product-constraints";
 import type { Product } from "@/lib/types";
 
 export type ProductState = { error: string; success?: string };
-const maximumImages = 8;
-
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -29,11 +28,18 @@ export async function saveProductAction(
   const description = text(formData, "description");
   const price = Number(text(formData, "price"));
   const stock = Number(text(formData, "stock"));
+  const accountGender = text(formData, "accountGender");
   if (name.length < 2 || !category || description.length < 10) {
     return { error: "กรุณากรอกชื่อ หมวดหมู่ และรายละเอียดสินค้าให้ครบ" };
   }
-  if (!Number.isFinite(price) || price < 0 || !Number.isInteger(stock) || stock < 0) {
-    return { error: "ราคาและจำนวนสินค้าต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป" };
+  if (accountGender !== "male" && accountGender !== "female") {
+    return { error: "กรุณาเลือกประเภทไอดีหลักชายหรือหลักหญิง" };
+  }
+  if (!Number.isFinite(price) || price < 0) {
+    return { error: "ราคาต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป" };
+  }
+  if (!Number.isInteger(stock) || stock < 1) {
+    return { error: "จำนวนสินค้าต้องมีอย่างน้อย 1 ชิ้น ห้ามบันทึกเป็น 0 ชิ้น" };
   }
 
   const removedImages = new Set(
@@ -43,8 +49,8 @@ export async function saveProductAction(
   const files = formData
     .getAll("images")
     .filter((value): value is File => value instanceof File && value.size > 0);
-  if (retainedImages.length + files.length > maximumImages) {
-    return { error: `สินค้าใส่รูปได้สูงสุด ${maximumImages} รูป` };
+  if (retainedImages.length + files.length > MAX_PRODUCT_IMAGES) {
+    return { error: `สินค้าใส่รูปได้สูงสุด ${MAX_PRODUCT_IMAGES} รูป` };
   }
 
   const uploadedImages: string[] = [];
@@ -58,6 +64,7 @@ export async function saveProductAction(
       description,
       price,
       stock,
+      accountGender,
       images: [...retainedImages, ...uploadedImages],
       featured: formData.get("featured") === "on",
       createdAt: existing?.createdAt ?? now,

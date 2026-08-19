@@ -3,7 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      bodySizeLimit: "35mb",
+      // 30 images x 20 MiB, with room for multipart form metadata.
+      bodySizeLimit: "610mb",
     },
   },
 };

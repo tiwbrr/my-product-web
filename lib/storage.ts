@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { MAX_IMAGE_SIZE_BYTES } from "@/lib/product-constraints";
 
 const bucket = "store-assets";
 const allowedTypes = new Map([
@@ -15,12 +16,18 @@ let bucketReady: Promise<void> | undefined;
 
 async function ensureBucket() {
   bucketReady ??= (async () => {
-    const { error } = await getSupabaseAdmin().storage.createBucket(bucket, {
+    const options = {
       public: true,
-      fileSizeLimit: 4 * 1024 * 1024,
+      fileSizeLimit: MAX_IMAGE_SIZE_BYTES,
       allowedMimeTypes: [...allowedTypes.keys()],
-    });
+    };
+    const storage = getSupabaseAdmin().storage;
+    const { error } = await storage.createBucket(bucket, options);
     if (error && !/already exists|duplicate/i.test(error.message)) throw error;
+    if (error) {
+      const { error: updateError } = await storage.updateBucket(bucket, options);
+      if (updateError) throw updateError;
+    }
   })();
   return bucketReady;
 }
@@ -28,7 +35,7 @@ async function ensureBucket() {
 export async function uploadImage(file: File, folder: "products" | "contacts" | "categories") {
   const extension = allowedTypes.get(file.type);
   if (!extension) throw new Error("รองรับรูป JPG, PNG และ WebP เท่านั้น");
-  if (file.size > 4 * 1024 * 1024) throw new Error("รูปภาพต้องมีขนาดไม่เกิน 4 MB");
+  if (file.size > MAX_IMAGE_SIZE_BYTES) throw new Error("รูปภาพแต่ละรูปต้องมีขนาดไม่เกิน 20 MB");
   await ensureBucket();
   const objectPath = `${folder}/${randomUUID()}.${extension}`;
   const { error } = await getSupabaseAdmin().storage

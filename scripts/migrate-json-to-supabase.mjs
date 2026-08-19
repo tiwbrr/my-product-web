@@ -51,6 +51,7 @@ await upsert(
     description: product.description,
     price: product.price,
     stock: product.stock,
+    account_gender: product.accountGender ?? "unspecified",
     image: product.image,
     images: product.images ?? (product.image ? [product.image] : []),
     featured: product.featured,

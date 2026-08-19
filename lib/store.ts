@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { GameCategory, Product, Session, StoreSettings, User } from "@/lib/types";
+import type { AccountGender, GameCategory, Product, Session, StoreSettings, User } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -25,6 +25,7 @@ type ProductRow = {
   description: string;
   price: number | string;
   stock: number;
+  account_gender?: AccountGender | null;
   image: string;
   images?: string[] | null;
   featured: boolean;
@@ -76,6 +77,7 @@ function toProduct(row: ProductRow): Product {
     description: row.description,
     price: Number(row.price),
     stock: row.stock,
+    accountGender: row.account_gender === "male" || row.account_gender === "female" ? row.account_gender : "unspecified",
     images: row.images?.length ? row.images : row.image ? [row.image] : [],
     featured: row.featured,
     createdAt: row.created_at,
@@ -178,6 +180,7 @@ export async function saveProduct(product: Product): Promise<Product> {
       description: product.description,
       price: product.price,
       stock: product.stock,
+      account_gender: product.accountGender,
       image: product.images[0] ?? "",
       images: product.images,
       featured: product.featured,

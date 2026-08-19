@@ -17,6 +17,8 @@ export type Session = {
   expiresAt: string;
 };
 
+export type AccountGender = "male" | "female" | "unspecified";
+
 export type Product = {
   id: string;
   name: string;
@@ -24,6 +26,7 @@ export type Product = {
   description: string;
   price: number;
   stock: number;
+  accountGender: AccountGender;
   images: string[];
   featured: boolean;
   createdAt: string;
