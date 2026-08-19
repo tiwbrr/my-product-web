@@ -6,18 +6,41 @@ import { MAX_IMAGE_SIZE_BYTES, MAX_PRODUCT_IMAGES } from "@/lib/product-constrai
 import type { GameCategory, Product } from "@/lib/types";
 
 const initialState: ProductState = { error: "" };
+const MAX_IMAGE_EDGE = 2560;
+const WEBP_QUALITY = 0.84;
+
+async function optimizeImage(file: File) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_IMAGE_EDGE / bitmap.width, MAX_IMAGE_EDGE / bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) {
+    bitmap.close();
+    throw new Error("ไม่สามารถประมวลผลรูปภาพได้");
+  }
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", WEBP_QUALITY));
+  if (!blob) throw new Error("ไม่สามารถแปลงรูปภาพเป็น WebP ได้");
+  const filename = `${file.name.replace(/\.[^.]+$/, "") || "product"}.webp`;
+  return new File([blob], filename, { type: "image/webp", lastModified: file.lastModified });
+}
 
 export function ProductForm({ product, categories, compact = false }: { product?: Product; categories: GameCategory[]; compact?: boolean }) {
   const [state, formAction, pending] = useActionState(saveProductAction, initialState);
   const [fileError, setFileError] = useState("");
   const [selectedFileCount, setSelectedFileCount] = useState(0);
   const [removedImageCount, setRemovedImageCount] = useState(0);
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimizationProgress, setOptimizationProgress] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state.success && !product) formRef.current?.reset(); }, [state.success, product]);
 
   const availableImageSlots = MAX_PRODUCT_IMAGES - (product?.images.length ?? 0) + removedImageCount;
 
-  function validateImages(input: HTMLInputElement) {
+  async function validateImages(input: HTMLInputElement) {
     const files = Array.from(input.files ?? []);
     let error = "";
     if (files.length > availableImageSlots) {
@@ -27,11 +50,40 @@ export function ProductForm({ product, categories, compact = false }: { product?
     }
     input.setCustomValidity(error);
     setFileError(error);
-    setSelectedFileCount(error ? 0 : files.length);
     if (error) {
+      setSelectedFileCount(0);
       input.value = "";
       input.reportValidity();
       input.setCustomValidity("");
+      return;
+    }
+
+    setOptimizing(true);
+    setSelectedFileCount(0);
+    setOptimizationProgress(`กำลังย่อรูป 0/${files.length}`);
+    try {
+      const optimizedFiles: File[] = [];
+      let originalBytes = 0;
+      let optimizedBytes = 0;
+      for (const [index, file] of files.entries()) {
+        originalBytes += file.size;
+        const optimized = await optimizeImage(file);
+        if (optimized.size > MAX_IMAGE_SIZE_BYTES) throw new Error(`รูป ${file.name} ยังมีขนาดเกิน 20 MB หลังย่อ`);
+        optimizedFiles.push(optimized);
+        optimizedBytes += optimized.size;
+        setOptimizationProgress(`กำลังย่อรูป ${index + 1}/${files.length}`);
+      }
+      const transfer = new DataTransfer();
+      optimizedFiles.forEach((file) => transfer.items.add(file));
+      input.files = transfer.files;
+      setSelectedFileCount(optimizedFiles.length);
+      setOptimizationProgress(`ย่อแล้ว ${optimizedFiles.length} รูป · ${(originalBytes / 1024 / 1024).toFixed(1)} MB เหลือ ${(optimizedBytes / 1024 / 1024).toFixed(1)} MB`);
+    } catch (caught) {
+      input.value = "";
+      setFileError(caught instanceof Error ? caught.message : "ย่อรูปภาพไม่สำเร็จ กรุณาลองใหม่");
+      setOptimizationProgress("");
+    } finally {
+      setOptimizing(false);
     }
   }
 
@@ -40,7 +92,8 @@ export function ProductForm({ product, categories, compact = false }: { product?
       ref={formRef}
       action={formAction}
       className={`product-form ${compact ? "product-form-compact" : ""}`}
-      onReset={() => { setFileError(""); setSelectedFileCount(0); setRemovedImageCount(0); }}
+      onSubmit={(event) => { if (optimizing) event.preventDefault(); }}
+      onReset={() => { setFileError(""); setSelectedFileCount(0); setRemovedImageCount(0); setOptimizationProgress(""); }}
     >
       {product && <input type="hidden" name="id" value={product.id} />}
       <div className="field-row">
@@ -61,15 +114,15 @@ export function ProductForm({ product, categories, compact = false }: { product?
       </label>
       {product?.images.length ? <div className="current-images"><b>รูปปัจจุบัน</b><div>{product.images.map((image, index) => <label key={image}><img src={image} alt={`${product.name} รูปที่ ${index + 1}`} /><span><input name="removeImages" type="checkbox" value={image} onChange={(event) => setRemovedImageCount((count) => count + (event.target.checked ? 1 : -1))} /> ลบรูปนี้</span></label>)}</div></div> : null}
       <label className="file-field">
-        <span>รูปสินค้า <small>เลือกพร้อมกันได้ · รวมสูงสุด 30 รูป · รูปละไม่เกิน 20 MB</small></span>
-        <input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => validateImages(event.currentTarget)} />
-        <i>{selectedFileCount ? `เลือกแล้ว ${selectedFileCount} รูป` : product?.images.length ? `เพิ่มได้อีก ${availableImageSlots} รูป (รูปใหม่จะต่อจากรูปเดิม)` : "เลือกรูปจากเครื่องพร้อมกันได้สูงสุด 30 รูป"}</i>
+        <span>รูปสินค้า <small>ต้นฉบับไม่เกิน 20 MB · ระบบย่อและแปลง WebP ให้อัตโนมัติ</small></span>
+        <input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={optimizing} onChange={(event) => void validateImages(event.currentTarget)} />
+        <i>{optimizationProgress || (selectedFileCount ? `พร้อมอัปโหลด ${selectedFileCount} รูป` : product?.images.length ? `เพิ่มได้อีก ${availableImageSlots} รูป (รวมสูงสุด 30 รูป)` : "เลือกพร้อมกันจากเครื่องได้สูงสุด 30 รูป")}</i>
       </label>
       <label className="checkbox-field"><input name="featured" type="checkbox" defaultChecked={product?.featured} /> แสดงป้ายสินค้าแนะนำ</label>
       {fileError && <p className="form-error" role="alert">{fileError}</p>}
       {state.error && <p className="form-error" role="alert">{state.error}</p>}
       {state.success && <p className="form-success" role="status">{state.success}</p>}
-      <button className="button button-dark button-wide" disabled={pending}>{pending ? "กำลังบันทึก..." : product ? "บันทึกการแก้ไข" : "+ เพิ่มไอดีเข้าร้าน"}</button>
+      <button className="button button-dark button-wide" disabled={pending || optimizing}>{optimizing ? "กำลังย่อรูป..." : pending ? "กำลังบันทึก..." : product ? "บันทึกการแก้ไข" : "+ เพิ่มไอดีเข้าร้าน"}</button>
     </form>
   );
 }
