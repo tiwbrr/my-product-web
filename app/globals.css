@@ -180,6 +180,7 @@ footer { padding:35px clamp(24px,5vw,72px); background:#111b16; display:flex; ju
 .sell-site .product-thumbnails button.active { border-color:#a879ff; }
 .sell-site .detail-stock { border-color:var(--store-border); }
 .sell-site .account-gender-badge { background:#241b34;color:#c5a2ff; }
+.related-products { max-width:1320px;margin:0 auto;padding:0 24px 90px; }
 .sell-site .sell-footer { background:#050507;border-top:1px solid #211f27; }
 
 /* Member chat and admin-managed YouTube playlist */

@@ -1,38 +1,35 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ProductCard } from "@/app/ui/product-card";
+import { catalogFiltersToSearchParams, filterCatalogProducts, type CatalogFilters, type CatalogGender, type CatalogSort } from "@/lib/catalog-filters";
 import { MAX_CATALOG_PRICE } from "@/lib/product-constraints";
-import type { AccountGender, GameCategory, Product } from "@/lib/types";
-
-type GenderFilter = "all" | Exclude<AccountGender, "unspecified">;
+import type { GameCategory, Product } from "@/lib/types";
 
 function priceBoundary(value: string) {
   if (value === "") return "";
   return String(Math.min(MAX_CATALOG_PRICE, Math.max(0, Number(value))));
 }
 
-export function ProductCatalog({ products, categories }: { products: Product[]; categories: GameCategory[] }) {
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState("newest");
-  const [gender, setGender] = useState<GenderFilter>("all");
-  const [minimumPrice, setMinimumPrice] = useState("0");
-  const [maximumPrice, setMaximumPrice] = useState(String(MAX_CATALOG_PRICE));
+export function ProductCatalog({ products, categories, initialFilters }: { products: Product[]; categories: GameCategory[]; initialFilters: CatalogFilters }) {
+  const [selectedCategory, setSelectedCategory] = useState(initialFilters.category);
+  const [query, setQuery] = useState(initialFilters.query);
+  const [sort, setSort] = useState<CatalogSort>(initialFilters.sort);
+  const [gender, setGender] = useState<CatalogGender>(initialFilters.gender);
+  const [minimumPrice, setMinimumPrice] = useState(initialFilters.minimumPrice);
+  const [maximumPrice, setMaximumPrice] = useState(initialFilters.maximumPrice);
 
-  const filteredProducts = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const minimum = minimumPrice === "" ? 0 : Number(minimumPrice);
-    const maximum = maximumPrice === "" ? MAX_CATALOG_PRICE : Number(maximumPrice);
-    const result = products.filter((product) =>
-      (selectedCategory === "all" || product.category === selectedCategory)
-      && (gender === "all" || product.accountGender === gender)
-      && product.price >= minimum
-      && product.price <= maximum
-      && (!normalizedQuery || `${product.name} ${product.description}`.toLowerCase().includes(normalizedQuery))
-    );
-    return [...result].sort((a, b) => sort === "low" ? a.price - b.price : sort === "high" ? b.price - a.price : b.createdAt.localeCompare(a.createdAt));
-  }, [gender, maximumPrice, minimumPrice, products, query, selectedCategory, sort]);
+  const activeFilters = useMemo<CatalogFilters>(() => ({
+    category: selectedCategory,
+    query,
+    sort,
+    gender,
+    minimumPrice,
+    maximumPrice,
+  }), [gender, maximumPrice, minimumPrice, query, selectedCategory, sort]);
+
+  const filteredProducts = useMemo(() => filterCatalogProducts(products, activeFilters), [activeFilters, products]);
+  const productSearchParams = useMemo(() => catalogFiltersToSearchParams(activeFilters), [activeFilters]);
 
   return <>
     <section className="game-categories" id="categories">
@@ -60,9 +57,9 @@ export function ProductCatalog({ products, categories }: { products: Product[]; 
       </div>
       <div className="catalog-tools">
         <label><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาไอดีเกม..." /></label>
-        <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="เรียงสินค้า"><option value="newest">ล่าสุด</option><option value="low">ราคาน้อยไปมาก</option><option value="high">ราคามากไปน้อย</option></select>
+        <select value={sort} onChange={(event) => setSort(event.target.value as CatalogSort)} aria-label="เรียงสินค้า"><option value="newest">ล่าสุด</option><option value="low">ราคาน้อยไปมาก</option><option value="high">ราคามากไปน้อย</option></select>
       </div>
-      {filteredProducts.length ? <div className="sell-product-grid">{filteredProducts.map((product) => <Link href={`/products/${product.id}`} className="sell-product-card" key={product.id}><div className="sell-product-image">{product.images[0] ? <img src={product.images[0]} alt={product.name} /> : <span><b>{product.category.charAt(0)}</b><small>รอใส่รูปไอดี</small></span>}{product.featured && <em>แนะนำ</em>}</div><div className="sell-product-copy"><small>{product.category} · {product.accountGender === "male" ? "หลักชาย" : product.accountGender === "female" ? "หลักหญิง" : "ยังไม่ระบุ"}</small><h3>{product.name}</h3><div><span className={product.stock ? "available" : "sold-out"}>{product.stock ? `มีไอดีอยู่ ${product.stock} ชิ้น` : "สินค้าหมด"}</span><strong>฿{product.price.toLocaleString("th-TH")}</strong></div></div></Link>)}</div> : <div className="sell-empty"><span>⌕</span><h3>ไม่พบไอดีเกมตามตัวกรองนี้</h3><p>ลองเปลี่ยนประเภทไอดี ช่วงราคา หมวดเกม หรือคำค้นหา</p></div>}
+      {filteredProducts.length ? <div className="sell-product-grid">{filteredProducts.map((product) => <ProductCard product={product} searchParams={productSearchParams} key={product.id} />)}</div> : <div className="sell-empty"><span>⌕</span><h3>ไม่พบไอดีเกมตามตัวกรองนี้</h3><p>ลองเปลี่ยนประเภทไอดี ช่วงราคา หมวดเกม หรือคำค้นหา</p></div>}
     </section>
   </>;
 }

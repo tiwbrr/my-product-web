@@ -5,11 +5,13 @@ import { ProductCatalog } from "@/app/ui/product-catalog";
 import { StoreHeader } from "@/app/ui/store-header";
 import { YouTubePlaylist } from "@/app/ui/youtube-playlist";
 import { getCurrentUser } from "@/lib/auth";
+import { parseCatalogFilters, type CatalogSearchParams } from "@/lib/catalog-filters";
 import { getChatMessages, getGameCategories, getProducts, getStoreSettings } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<CatalogSearchParams> }) {
+  const catalogFilters = parseCatalogFilters(await searchParams);
   const user = await getCurrentUser();
   const [products, settings, categories, messages] = await Promise.all([
     getProducts(),
@@ -24,7 +26,7 @@ export default async function Home() {
       <div className="sell-hero-copy"><span className="sell-kicker">WELCOME TO</span><h1>SELL ID</h1><p>ร้านรวมไอดีเกม Genshin และ Wuthering Wave<br />เลือกดูไอดีที่ต้องการได้จากหมวดหมู่ด้านล่าง</p><a href="#categories">เลือกหมวดหมู่เกม <b>↓</b></a></div>
     </section>
     <section className="sell-notice"><b>วิธีเลือกซื้อ</b><p>กดเมนูสามขีดมุมขวาบน หรือเลือกหมวดเกมด้านล่าง จากนั้นกดไอดีที่สนใจเพื่อดูรูปและรายละเอียดทั้งหมด หากต้องการสั่งซื้อให้ติดต่อร้านผ่าน LINE หรือ Facebook</p></section>
-    <ProductCatalog products={products} categories={categories} />
+    <ProductCatalog products={products} categories={categories} initialFilters={catalogFilters} />
     <YouTubePlaylist url={settings.youtubePlaylistUrl} />
     {user ? <ChatRoom messages={messages} user={user} /> : <section className="chat-guest" id="chat"><span>MEMBER CHAT</span><h2>พูดคุยกับสมาชิกในร้าน</h2><p>สมัครสมาชิกหรือเข้าสู่ระบบเพื่ออ่านและส่งข้อความในแชท ข้อความจะถูกเก็บไว้ 7 วัน</p><div><Link href="/login" className="button button-light">เข้าสู่ระบบ</Link><Link href="/register" className="button chat-register-button">สมัครสมาชิก</Link></div></section>}
     <ContactSection settings={settings} />
