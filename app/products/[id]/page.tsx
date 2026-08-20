@@ -39,6 +39,6 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
       <div className="sell-product-grid">{otherProducts.map((item) => <ProductCard product={item} searchParams={serializedFilters} key={item.id} />)}</div>
     </section>}
     <ContactSection settings={settings} />
-    <footer><Link href="/" className="brand brand-light"><span>S</span> SELL ID</Link><p>© 2026 Sell ID. Game account store.</p></footer>
+    <footer><Link href="/" className="brand brand-light"><span>K</span> KUOZO SHOP</Link><p>© 2026 Kuozo Shop. Game account store.</p></footer>
   </main>;
 }

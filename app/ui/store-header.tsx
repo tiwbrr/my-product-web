@@ -18,7 +18,7 @@ export function StoreHeader({ user }: { user: SafeUser | null }) {
   return <>
     <header className="game-header">
       <Link href="/#categories" className="game-header-category">หมวดหมู่เกม</Link>
-      <Link href="/" className="game-brand"><span>S</span><b>SELL ID</b></Link>
+      <Link href="/" className="game-brand"><span>K</span><b>KUOZO SHOP</b></Link>
       <button className="hamburger-button" onClick={() => setOpen(true)} aria-label="เปิดเมนู" aria-expanded={open}><i></i><i></i><i></i></button>
     </header>
     {open && <div className="menu-overlay" onMouseDown={(event) => { if (event.currentTarget === event.target) closeMenu(); }}>
@@ -26,7 +26,7 @@ export function StoreHeader({ user }: { user: SafeUser | null }) {
         <div className="menu-drawer-head"><span>MENU</span><button onClick={closeMenu} aria-label="ปิดเมนู">×</button></div>
         <nav><Link href="/" onClick={closeMenu}><span>01</span>หน้าหลัก</Link><Link href="/#categories" onClick={closeMenu}><span>02</span>หมวดหมู่เกม</Link><Link href="/#products" onClick={closeMenu}><span>03</span>รายการไอดีทั้งหมด</Link><Link href="/#chat" onClick={closeMenu}><span>04</span>แชทสมาชิก</Link><Link href="/#contact" onClick={closeMenu}><span>05</span>ติดต่อร้านค้า</Link>{user?.role === "admin" && <Link href="/admin" onClick={closeMenu}><span>06</span>จัดการร้าน</Link>}</nav>
         <div className="menu-account">{user ? <><Link href="/account" onClick={closeMenu}>บัญชีของ {user.name}</Link><form action={logoutAction}><button>ออกจากระบบ</button></form></> : <><Link href="/login" onClick={closeMenu}>เข้าสู่ระบบ</Link><Link href="/register" onClick={closeMenu}>สมัครสมาชิก</Link></>}</div>
-        <small>SELL ID · GAME ACCOUNT STORE</small>
+        <small>KUOZO SHOP · GAME ACCOUNT STORE</small>
       </aside>
     </div>}
   </>;

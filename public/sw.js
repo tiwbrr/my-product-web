@@ -5,7 +5,7 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data.json();
   } catch {
-    data = { title: "Sell ID", body: event.data.text() };
+    data = { title: "Kuozo Shop", body: event.data.text() };
   }
 
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
@@ -17,11 +17,11 @@ self.addEventListener("push", (event) => {
       visibleHome.postMessage({ type: "CHAT_PUSH" });
       return;
     }
-    return self.registration.showNotification(data.title || "Sell ID", {
+    return self.registration.showNotification(data.title || "Kuozo Shop", {
       body: data.body || "มีข้อความแชทใหม่",
       icon: data.icon || "/favicon.ico",
       badge: data.badge || "/favicon.ico",
-      tag: data.tag || "sell-id-chat",
+      tag: data.tag || "kuozo-shop-chat",
       renotify: true,
       silent: false,
       data: { url: data.url || "/#chat" },
