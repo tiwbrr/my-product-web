@@ -1,10 +1,9 @@
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // A dynamic lookup keeps this value configurable at server runtime instead of
-  // freezing a NEXT_PUBLIC_* value into the client bundle during `next build`.
-  const publicKeyVariable = "NEXT_PUBLIC_VAPID_PUBLIC_KEY";
-  const publicKey = process.env[publicKeyVariable] || "";
+  // The key stays server-configured and only this explicitly public value is
+  // returned to the browser. The private VAPID key is never included here.
+  const publicKey = process.env.VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
   const soundUrlVariable = "NOTIFICATION_SOUND_URL";
   const configuredSoundUrl = process.env[soundUrlVariable]?.trim() || "";
   const notificationSoundUrl = configuredSoundUrl.startsWith("/") || configuredSoundUrl.startsWith("https://")
