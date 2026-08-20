@@ -292,7 +292,7 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
     <div className="community-heading">
       <div><span>MEMBER COMMUNITY</span><h2>แชทสมาชิก</h2></div>
       <div className="chat-heading-actions">
-        <p>ล็อกอินในชื่อ <b>{user.name}</b> · ระบบเก็บข้อความ 7 วัน</p>
+        <p>ล็อกอินในชื่อ <b>{user.name}</b></p>
         <button className={`push-toggle push-${pushStatus}`} type="button" onClick={togglePushNotifications} disabled={["loading", "unsupported", "insecure", "unconfigured"].includes(pushStatus)}>{pushLabel}</button>
       </div>
     </div>
