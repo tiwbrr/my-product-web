@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { getStoreSettings, removeContactChannel, saveContactChannel, saveStoreSettings } from "@/lib/store";
-import { removeImage, uploadImage } from "@/lib/storage";
+import { removeImage, removeStoreAsset, uploadImage, uploadNotificationSound } from "@/lib/storage";
 import { normalizeYouTubePlaylistUrl } from "@/lib/youtube";
 
 export type SettingsState = { error: string; success?: string };
@@ -40,6 +40,39 @@ export async function savePlaylistSettingsAction(
     return { error: "", success: "บันทึก YouTube Playlist แล้ว" };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "บันทึก Playlist ไม่สำเร็จ" };
+  }
+}
+
+export async function saveNotificationSoundAction(
+  _state: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  await requireAdmin();
+  const current = await getStoreSettings();
+  const removeSound = formData.get("removeSound") === "on";
+  const soundFile = formData.get("notificationSound");
+  const hasNewFile = soundFile instanceof File && soundFile.size > 0;
+  if (!hasNewFile && !removeSound && !current.notificationSoundUrl) {
+    return { error: "กรุณาเลือกไฟล์เสียง MP3, WAV หรือ OGG" };
+  }
+
+  let uploadedSound = "";
+  try {
+    if (hasNewFile) uploadedSound = await uploadNotificationSound(soundFile);
+    const notificationSoundUrl = uploadedSound || (removeSound ? "" : current.notificationSoundUrl);
+    await saveStoreSettings({ ...current, notificationSoundUrl, updatedAt: new Date().toISOString() });
+    if (current.notificationSoundUrl && current.notificationSoundUrl !== notificationSoundUrl) {
+      await removeStoreAsset(current.notificationSoundUrl).catch(() => undefined);
+    }
+    revalidatePath("/");
+    revalidatePath("/admin");
+    return {
+      error: "",
+      success: notificationSoundUrl ? "บันทึกเสียงแจ้งเตือนแล้ว" : "กลับมาใช้เสียง 2 จังหวะมาตรฐานแล้ว",
+    };
+  } catch (error) {
+    if (uploadedSound) await removeStoreAsset(uploadedSound).catch(() => undefined);
+    return { error: error instanceof Error ? error.message : "บันทึกเสียงแจ้งเตือนไม่สำเร็จ" };
   }
 }
 

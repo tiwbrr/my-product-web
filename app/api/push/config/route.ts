@@ -1,3 +1,5 @@
+import { getNotificationSoundUrl } from "@/lib/store";
+
 export const dynamic = "force-dynamic";
 
 export async function GET() {
@@ -6,9 +8,8 @@ export async function GET() {
   const publicKey = process.env.VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
   const soundUrlVariable = "NOTIFICATION_SOUND_URL";
   const configuredSoundUrl = process.env[soundUrlVariable]?.trim() || "";
-  const notificationSoundUrl = configuredSoundUrl.startsWith("/") || configuredSoundUrl.startsWith("https://")
-    ? configuredSoundUrl
-    : "";
+  const environmentSoundUrl = configuredSoundUrl.startsWith("/") || configuredSoundUrl.startsWith("https://") ? configuredSoundUrl : "";
+  const notificationSoundUrl = await getNotificationSoundUrl().catch(() => "") || environmentSoundUrl;
   return Response.json(
     { publicKey, notificationSoundUrl },
     { headers: { "Cache-Control": "no-store" } },

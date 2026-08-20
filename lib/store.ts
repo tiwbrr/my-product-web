@@ -37,6 +37,7 @@ type StoreSettingsRow = {
   line_qr_image: string;
   facebook_url: string;
   youtube_playlist_url: string;
+  notification_sound_url?: string | null;
   updated_at: string;
 };
 
@@ -245,26 +246,36 @@ export async function getMemberCount(): Promise<number> {
 export async function getStoreSettings(): Promise<StoreSettings> {
   const { data, error } = await getSupabaseAdmin()
     .from("store_settings")
-    .select("line_qr_image, facebook_url, youtube_playlist_url, updated_at")
+    .select("*")
     .eq("id", 1)
     .maybeSingle();
   if (error?.code === "PGRST205" || error?.code === "42P01") {
-    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "", contactChannels: [] };
+    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", notificationSoundUrl: "", updatedAt: "", contactChannels: [] };
   }
   if (error) throw databaseError("getStoreSettings", error);
   const row = data as StoreSettingsRow | null;
   const contactChannels = await getContactChannels();
   if (contactChannels.length) {
     return row
-      ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at, contactChannels }
-      : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "", contactChannels };
+      ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels }
+      : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", notificationSoundUrl: "", updatedAt: "", contactChannels };
   }
   const legacyChannels: ContactChannel[] = [];
   if (row?.line_qr_image) legacyChannels.push({ id: "legacy-line", name: "LINE", description: "สแกน QR Code เพื่อเพิ่มเพื่อน", url: "", iconImage: "", qrImage: row.line_qr_image, sortOrder: 10, createdAt: row.updated_at, updatedAt: row.updated_at });
   if (row?.facebook_url) legacyChannels.push({ id: "legacy-facebook", name: "Facebook", description: "เปิดหน้า Facebook ของร้าน", url: row.facebook_url, iconImage: "", qrImage: "", sortOrder: 20, createdAt: row.updated_at, updatedAt: row.updated_at });
   return row
-    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at, contactChannels: legacyChannels }
-    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "", contactChannels: [] };
+    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: legacyChannels }
+    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", notificationSoundUrl: "", updatedAt: "", contactChannels: [] };
+}
+
+export async function getNotificationSoundUrl(): Promise<string> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("store_settings")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) throw databaseError("getNotificationSoundUrl", error);
+  return (data as StoreSettingsRow | null)?.notification_sound_url ?? "";
 }
 
 export async function saveStoreSettings(settings: StoreSettings): Promise<StoreSettings> {
@@ -275,13 +286,14 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
       line_qr_image: settings.lineQrImage,
       facebook_url: settings.facebookUrl,
       youtube_playlist_url: settings.youtubePlaylistUrl,
+      notification_sound_url: settings.notificationSoundUrl,
       updated_at: settings.updatedAt,
     })
-    .select("line_qr_image, facebook_url, youtube_playlist_url, updated_at")
+    .select("*")
     .single();
   if (error) throw databaseError("saveStoreSettings", error);
   const row = data as StoreSettingsRow;
-  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at, contactChannels: settings.contactChannels };
+  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: settings.contactChannels };
 }
 
 function toContactChannel(row: ContactChannelRow): ContactChannel {

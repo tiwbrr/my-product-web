@@ -31,10 +31,12 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ## Notification sound
 
-Chat uses a loud two-beat synthesized sound by default. To use an uploaded audio
-file later, set `NOTIFICATION_SOUND_URL` to a same-origin path or a public HTTPS
-MP3, WAV, or OGG URL and restart the server. If that file cannot play, the chat
-automatically falls back to the built-in two-beat sound.
+Chat uses a loud two-beat synthesized sound by default. An administrator can
+upload an MP3, WAV, or OGG file (up to 8 MB) from the store-management page,
+preview or replace it, and remove it to restore the default sound. The optional
+`NOTIFICATION_SOUND_URL` environment variable remains available as a server
+fallback. If a configured file cannot play, chat falls back to the built-in
+two-beat sound automatically.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

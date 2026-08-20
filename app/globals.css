@@ -315,6 +315,8 @@ footer { padding:35px clamp(24px,5vw,72px); background:#111b16; display:flex; ju
 .contact-admin-heading { display:flex;gap:13px;align-items:center;margin-bottom:20px; }
 .contact-admin-heading>span { width:34px;height:34px;display:grid;place-items:center;border-radius:50%;background:#ece7f6;color:#6945bb;font:800 10px var(--font-geist); }
 .contact-admin-heading h3 { margin:0;font-size:16px; }.contact-admin-heading p { margin:2px 0 0;color:var(--muted);font-size:10px; }
+.notification-sound-preview { display:grid;gap:9px;padding:14px;background:#fff;border:1px solid var(--line); }
+.notification-sound-preview b { font-size:12px; }.notification-sound-preview audio { width:100%;height:38px; }
 .contact-channel-create { border:1px dashed #cfc5dc;background:#fff;padding:20px; }
 .contact-media-fields { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
 .contact-channel-list { display:grid;gap:9px; }

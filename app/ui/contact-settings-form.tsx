@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { deleteContactChannelAction, saveContactChannelAction, savePlaylistSettingsAction, type SettingsState } from "@/app/actions/settings";
+import { deleteContactChannelAction, saveContactChannelAction, saveNotificationSoundAction, savePlaylistSettingsAction, type SettingsState } from "@/app/actions/settings";
 import type { ContactChannel, StoreSettings } from "@/lib/types";
 
 const initialState: SettingsState = { error: "" };
@@ -35,6 +35,7 @@ function ContactChannelForm({ channel }: { channel?: ContactChannel }) {
 
 export function ContactSettingsForm({ settings }: { settings: StoreSettings }) {
   const [playlistState, playlistAction, playlistPending] = useActionState(savePlaylistSettingsAction, initialState);
+  const [soundState, soundAction, soundPending] = useActionState(saveNotificationSoundAction, initialState);
   return <div className="contact-settings-form">
     <section className="contact-admin-block">
       <div className="contact-admin-heading"><span>01</span><div><h3>YouTube Playlist</h3><p>ตั้งค่าเพลย์ลิสต์ที่แสดงบนหน้าร้าน</p></div></div>
@@ -47,12 +48,27 @@ export function ContactSettingsForm({ settings }: { settings: StoreSettings }) {
     </section>
 
     <section className="contact-admin-block">
-      <div className="contact-admin-heading"><span>02</span><div><h3>เพิ่มช่องทางติดต่อ</h3><p>รองรับแพลตฟอร์มใหม่ ไอคอน ลิงก์ และ QR Code</p></div></div>
+      <div className="contact-admin-heading"><span>02</span><div><h3>เสียงแจ้งเตือนแชท</h3><p>อัปโหลดเสียงที่ต้องการให้เล่นเมื่อมีข้อความใหม่</p></div></div>
+      <form action={soundAction} className="product-form notification-sound-form">
+        {settings.notificationSoundUrl && <div className="notification-sound-preview">
+          <b>เสียงที่ใช้อยู่</b>
+          <audio controls preload="metadata" src={settings.notificationSoundUrl}>เบราว์เซอร์นี้ไม่รองรับการเล่นเสียง</audio>
+        </div>}
+        <label className="file-field"><span>{settings.notificationSoundUrl ? "เปลี่ยนไฟล์เสียง" : "อัปโหลดไฟล์เสียง"} <small>MP3, WAV หรือ OGG · ไม่เกิน 8 MB</small></span><input name="notificationSound" type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/ogg,.mp3,.wav,.ogg" required={!settings.notificationSoundUrl} /><i>แนะนำไฟล์เสียงสั้นประมาณ 1–3 วินาที</i></label>
+        {settings.notificationSoundUrl && <label className="checkbox-field"><input type="checkbox" name="removeSound" /><span>ลบไฟล์นี้และกลับไปใช้เสียง 2 จังหวะมาตรฐาน</span></label>}
+        {soundState.error && <p className="form-error" role="alert">{soundState.error}</p>}
+        {soundState.success && <p className="form-success" role="status">{soundState.success}</p>}
+        <button className="button button-dark" disabled={soundPending}>{soundPending ? "กำลังอัปโหลด..." : "บันทึกเสียงแจ้งเตือน"}</button>
+      </form>
+    </section>
+
+    <section className="contact-admin-block">
+      <div className="contact-admin-heading"><span>03</span><div><h3>เพิ่มช่องทางติดต่อ</h3><p>รองรับแพลตฟอร์มใหม่ ไอคอน ลิงก์ และ QR Code</p></div></div>
       <ContactChannelForm />
     </section>
 
     <section className="contact-admin-block">
-      <div className="contact-admin-heading"><span>03</span><div><h3>ช่องทางที่แสดงอยู่</h3><p>{settings.contactChannels.length} ช่องทาง · กดเพื่อแก้ไขรายละเอียด</p></div></div>
+      <div className="contact-admin-heading"><span>04</span><div><h3>ช่องทางที่แสดงอยู่</h3><p>{settings.contactChannels.length} ช่องทาง · กดเพื่อแก้ไขรายละเอียด</p></div></div>
       <div className="contact-channel-list">
         {settings.contactChannels.map((channel) => <details key={channel.id}>
           <summary>{channel.iconImage ? <img src={channel.iconImage} alt="" /> : <i>{channel.name.charAt(0).toUpperCase()}</i>}<span><b>{channel.name}</b><small>{channel.url && channel.qrImage ? "ลิงก์ + QR Code" : channel.qrImage ? "QR Code" : "ลิงก์"}</small></span><em>แก้ไข⌄</em></summary>

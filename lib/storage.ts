@@ -7,11 +7,18 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { MAX_IMAGE_SIZE_BYTES } from "@/lib/product-constraints";
 
 const bucket = "store-assets";
-const allowedTypes = new Map([
+const allowedImageTypes = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
   ["image/webp", "webp"],
 ]);
+const allowedSoundTypes = new Map([
+  ["audio/mpeg", "mp3"],
+  ["audio/wav", "wav"],
+  ["audio/x-wav", "wav"],
+  ["audio/ogg", "ogg"],
+]);
+const maxSoundSizeBytes = 8 * 1024 * 1024;
 let bucketReady: Promise<void> | undefined;
 
 async function ensureBucket() {
@@ -19,7 +26,7 @@ async function ensureBucket() {
     const options = {
       public: true,
       fileSizeLimit: MAX_IMAGE_SIZE_BYTES,
-      allowedMimeTypes: [...allowedTypes.keys()],
+      allowedMimeTypes: [...allowedImageTypes.keys(), ...allowedSoundTypes.keys()],
     };
     const storage = getSupabaseAdmin().storage;
     const { error } = await storage.createBucket(bucket, options);
@@ -33,7 +40,7 @@ async function ensureBucket() {
 }
 
 export async function uploadImage(file: File, folder: "products" | "contacts" | "categories") {
-  const extension = allowedTypes.get(file.type);
+  const extension = allowedImageTypes.get(file.type);
   if (!extension) throw new Error("รองรับรูป JPG, PNG และ WebP เท่านั้น");
   if (file.size > MAX_IMAGE_SIZE_BYTES) throw new Error("รูปภาพแต่ละรูปต้องมีขนาดไม่เกิน 20 MB");
   await ensureBucket();
@@ -45,17 +52,34 @@ export async function uploadImage(file: File, folder: "products" | "contacts" | 
   return getSupabaseAdmin().storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
 }
 
-export async function removeImage(imageUrl: string) {
-  if (!imageUrl) return;
-  if (imageUrl.startsWith("/uploads/")) {
-    try { await unlink(path.join(process.cwd(), "public", "uploads", path.basename(imageUrl))); }
+export async function uploadNotificationSound(file: File) {
+  const extension = allowedSoundTypes.get(file.type);
+  if (!extension) throw new Error("รองรับไฟล์เสียง MP3, WAV และ OGG เท่านั้น");
+  if (file.size > maxSoundSizeBytes) throw new Error("ไฟล์เสียงต้องมีขนาดไม่เกิน 8 MB");
+  await ensureBucket();
+  const objectPath = `notification-sounds/${randomUUID()}.${extension}`;
+  const { error } = await getSupabaseAdmin().storage
+    .from(bucket)
+    .upload(objectPath, await file.arrayBuffer(), { contentType: file.type, upsert: false });
+  if (error) throw new Error(`อัปโหลดเสียงไม่สำเร็จ: ${error.message}`);
+  return getSupabaseAdmin().storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
+}
+
+export async function removeStoreAsset(assetUrl: string) {
+  if (!assetUrl) return;
+  if (assetUrl.startsWith("/uploads/")) {
+    try { await unlink(path.join(process.cwd(), "public", "uploads", path.basename(assetUrl))); }
     catch { /* The old local file may already be gone. */ }
     return;
   }
   const marker = `/storage/v1/object/public/${bucket}/`;
-  const markerIndex = imageUrl.indexOf(marker);
+  const markerIndex = assetUrl.indexOf(marker);
   if (markerIndex < 0) return;
-  const objectPath = decodeURIComponent(imageUrl.slice(markerIndex + marker.length));
+  const objectPath = decodeURIComponent(assetUrl.slice(markerIndex + marker.length));
   const { error } = await getSupabaseAdmin().storage.from(bucket).remove([objectPath]);
-  if (error) throw new Error(`ลบรูปไม่สำเร็จ: ${error.message}`);
+  if (error) throw new Error(`ลบไฟล์ไม่สำเร็จ: ${error.message}`);
+}
+
+export async function removeImage(imageUrl: string) {
+  return removeStoreAsset(imageUrl);
 }

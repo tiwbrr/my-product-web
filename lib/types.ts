@@ -37,6 +37,7 @@ export type StoreSettings = {
   lineQrImage: string;
   facebookUrl: string;
   youtubePlaylistUrl: string;
+  notificationSoundUrl: string;
   updatedAt: string;
   contactChannels: ContactChannel[];
 };
