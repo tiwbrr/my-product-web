@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, ChatMessage, GameCategory, Product, Session, StoreSettings, User } from "@/lib/types";
+import type { AccountGender, ChatMessage, GameCategory, Product, PushSubscriptionRecord, Session, StoreSettings, User } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -46,6 +46,14 @@ type ChatMessageRow = {
   message: string;
   created_at: string;
   store_users: { name: string } | { name: string }[] | null;
+};
+
+type PushSubscriptionRow = {
+  endpoint: string;
+  user_id: string;
+  expiration_time: number | string | null;
+  p256dh: string;
+  auth: string;
 };
 
 type GameCategoryRow = {
@@ -284,6 +292,18 @@ export async function getChatMessages(): Promise<ChatMessage[]> {
   });
 }
 
+export async function getLatestChatMessageTime(userId: string): Promise<string | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("chat_messages")
+    .select("created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw databaseError("getLatestChatMessageTime", error);
+  return data?.created_at ?? null;
+}
+
 export async function addChatMessage(message: Omit<ChatMessage, "userName">): Promise<void> {
   const { error } = await getSupabaseAdmin().from("chat_messages").insert({
     id: message.id,
@@ -291,7 +311,48 @@ export async function addChatMessage(message: Omit<ChatMessage, "userName">): Pr
     message: message.message,
     created_at: message.createdAt,
   });
+  if (error?.message.includes("CHAT_COOLDOWN")) throw new Error("CHAT_COOLDOWN", { cause: error });
   if (error) throw databaseError("addChatMessage", error);
+}
+
+export async function savePushSubscription(subscription: PushSubscriptionRecord): Promise<void> {
+  const { error } = await getSupabaseAdmin().from("push_subscriptions").upsert({
+    endpoint: subscription.endpoint,
+    user_id: subscription.userId,
+    expiration_time: subscription.expirationTime,
+    p256dh: subscription.keys.p256dh,
+    auth: subscription.keys.auth,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "endpoint" });
+  if (error) throw databaseError("savePushSubscription", error);
+}
+
+export async function removePushSubscription(endpoint: string, userId?: string): Promise<void> {
+  let query = getSupabaseAdmin().from("push_subscriptions").delete().eq("endpoint", endpoint);
+  if (userId) query = query.eq("user_id", userId);
+  const { error } = await query;
+  if (error) throw databaseError("removePushSubscription", error);
+}
+
+export async function removePushSubscriptions(endpoints: string[]): Promise<void> {
+  if (!endpoints.length) return;
+  const { error } = await getSupabaseAdmin().from("push_subscriptions").delete().in("endpoint", endpoints);
+  if (error) throw databaseError("removePushSubscriptions", error);
+}
+
+export async function getPushSubscriptions(excludeUserId?: string): Promise<PushSubscriptionRecord[]> {
+  let query = getSupabaseAdmin()
+    .from("push_subscriptions")
+    .select("endpoint, user_id, expiration_time, p256dh, auth");
+  if (excludeUserId) query = query.neq("user_id", excludeUserId);
+  const { data, error } = await query;
+  if (error) throw databaseError("getPushSubscriptions", error);
+  return (data as PushSubscriptionRow[]).map((row) => ({
+    endpoint: row.endpoint,
+    userId: row.user_id,
+    expirationTime: row.expiration_time === null ? null : Number(row.expiration_time),
+    keys: { p256dh: row.p256dh, auth: row.auth },
+  }));
 }
 
 const fallbackGameCategories: GameCategory[] = [

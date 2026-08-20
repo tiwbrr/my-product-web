@@ -137,7 +137,7 @@ footer { padding:35px clamp(24px,5vw,72px); background:#111b16; display:flex; ju
   .price-filter input { width:100%; }
 }
 
-/* Dark storefront theme. Admin and authentication screens keep their light workspace theme. */
+/* Shared customer-facing dark theme. The admin workspace intentionally stays light. */
 .sell-site { --store-bg:#07070a;--store-panel:#111116;--store-panel-raised:#18181f;--store-border:#2a2933;--store-text:#f4f1f8;--store-muted:#aaa3b4;background:var(--store-bg);color:var(--store-text); }
 .sell-site .game-header { background:#09090ded;border-color:var(--store-border);box-shadow:0 8px 30px #0008;backdrop-filter:blur(14px); }
 .sell-site .game-header-category { color:#b9b2c3; }
@@ -219,10 +219,26 @@ footer { padding:35px clamp(24px,5vw,72px); background:#111b16; display:flex; ju
 .chat-guest p { max-width:590px;margin:13px auto 24px;color:var(--store-muted);font-size:13px;line-height:1.7; }
 .chat-guest>div { display:flex;justify-content:center;gap:10px; }
 .chat-register-button { color:#e6d9ff;border:1px solid #594877;background:transparent; }
+.chat-heading-actions { display:grid;justify-items:end;gap:9px; }
+.push-toggle { border:1px solid #4b405b;background:#1a1720;color:#c8bed2;border-radius:6px;padding:8px 11px;font-size:10px;font-weight:700; }
+.push-toggle:hover { border-color:#8e68c7;color:#fff; }
+.push-toggle.push-on { background:#241b34;border-color:#7650cc;color:#d6c1ff; }
+.push-toggle.push-denied,.push-toggle.push-error { color:#ff9caa;border-color:#6c3443; }
+.chat-compose { min-width:0;display:grid; }
+.chat-form-meta { display:flex;justify-content:space-between;padding:0 15px 9px;color:#77717f;font-size:9px; }
+.chat-form-meta b { font-weight:700; }
+.chat-form-meta b.at-limit { color:#ff8da7; }
+.chat-toast-stack { position:fixed;right:22px;bottom:22px;z-index:120;width:min(370px,calc(100vw - 36px));display:grid;gap:10px;pointer-events:none; }
+.chat-toast { pointer-events:auto;display:grid;grid-template-columns:42px 1fr auto;gap:12px;align-items:start;padding:15px;background:#17151dcc;border:1px solid #504460;border-left:3px solid #8d61e4;border-radius:10px;color:#fff;box-shadow:0 18px 55px #000c;backdrop-filter:blur(16px);animation:chat-toast-in .25s ease-out; }
+.chat-toast>span { width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#6d46d9,#ee6fa9);font-weight:800; }
+.chat-toast b { font-size:12px; }.chat-toast p { margin:4px 0 0;color:#cfc8d5;font-size:12px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }
+.chat-toast i { color:#8f8798;font-size:17px;font-style:normal; }
+@keyframes chat-toast-in { from { opacity:0;transform:translateX(35px); } to { opacity:1;transform:translateX(0); } }
 
 @media (max-width:680px) {
   .playlist-section,.community-chat,.chat-guest { margin-bottom:55px;padding-left:18px;padding-right:18px; }
   .community-heading { align-items:start;flex-direction:column;gap:8px; }
+  .chat-heading-actions { justify-items:start; }
   .chat-window { height:390px;padding:14px 11px; }
   .chat-message { grid-template-columns:32px 1fr;gap:8px; }
   .chat-message.own-message { grid-template-columns:1fr 32px; }
@@ -233,4 +249,48 @@ footer { padding:35px clamp(24px,5vw,72px); background:#111b16; display:flex; ju
   .chat-form button { min-height:46px; }
   .chat-guest { margin-left:18px;margin-right:18px;padding:38px 22px; }
   .chat-guest>div { flex-direction:column; }
+  .chat-toast-stack { right:18px;bottom:18px; }
 }
+
+/* Authentication and account pages use the same black, violet and pink palette as the storefront. */
+.auth-page,.account-page {
+  --store-bg:#07070a;
+  --store-panel:#111116;
+  --store-panel-raised:#18181f;
+  --store-border:#2a2933;
+  --store-text:#f4f1f8;
+  --store-muted:#aaa3b4;
+  color:var(--store-text);
+}
+.auth-page { background:var(--store-bg); }
+.auth-panel { background:radial-gradient(circle at 12% 10%,#25183a 0,transparent 32%),var(--store-bg); }
+.auth-page .brand,.account-page .brand { color:#fff; }
+.auth-page .brand>span,.account-page .brand>span,.sell-site>footer .brand>span { background:linear-gradient(135deg,#6d46d9,#ee6fa9);color:#fff;box-shadow:0 8px 24px #6d46d955; }
+.auth-page .eyebrow,.account-page .eyebrow,.sell-site .eyebrow { color:#b895ff; }
+.auth-heading p,.auth-page .privacy-note,.auth-page .auth-switch { color:var(--store-muted); }
+.auth-page .auth-form input { background:var(--store-panel-raised);border-color:var(--store-border);color:var(--store-text);border-radius:6px; }
+.auth-page .auth-form input::placeholder { color:#77717f; }
+.auth-page .auth-form input:focus { border-color:#9067e8;box-shadow:0 0 0 3px #754bd033; }
+.auth-page .auth-switch a { color:#c5a2ff; }
+.auth-page .button-dark,.account-page .button-dark,.sell-site .button-dark,.sell-site .button-light { background:linear-gradient(135deg,#6841ba,#8c55dc);color:#fff;box-shadow:0 10px 28px #6d46d933; }
+.auth-page .button-dark:hover,.account-page .button-dark:hover,.sell-site .button-dark:hover,.sell-site .button-light:hover { background:linear-gradient(135deg,#7a4fd2,#a25ee5); }
+.auth-art { background:radial-gradient(circle at 70% 25%,#9668f0 0,transparent 30%),linear-gradient(135deg,#211335 0%,#4c2b83 62%,#c85b9b 135%); }
+.auth-art:before,.auth-art:after { border-color:#ffffff1c; }
+.auth-quote>span { color:#d2b8ff; }
+.auth-quote small { color:#d8cde5; }
+.auth-art-register { background:radial-gradient(circle at 70% 25%,#9668f0 0,transparent 30%),linear-gradient(135deg,#211335 0%,#4c2b83 62%,#c85b9b 135%); }
+.member-card { background:linear-gradient(145deg,#20172e,#392454);color:#fff;border:1px solid #ffffff33;box-shadow:0 30px 70px #12082299,inset 0 0 45px #fff1; }
+.auth-page .form-error,.account-page .form-error { background:#2b141d;color:#ff9aaa;border-color:#d54f73; }
+.auth-page .form-success,.auth-page .success-banner,.account-page .form-success,.account-page .success-banner { background:#14251f;color:#8ed8b6;border-color:#45a97d; }
+
+.account-page { background:radial-gradient(circle at 50% 10%,#3f2867 0,transparent 34%),linear-gradient(145deg,#07070a,#100b18); }
+.account-card { background:var(--store-panel);border:1px solid var(--store-border);border-radius:12px;box-shadow:0 28px 80px #000a; }
+.avatar-large { background:linear-gradient(135deg,#6d46d9,#ee6fa9);color:#fff;box-shadow:0 12px 35px #6d46d955; }
+.account-card>p:not(.success-banner,.form-error) { color:var(--store-muted); }
+.account-page .button-outline { color:#e4d8f4;border-color:#594877;background:#17131e; }
+.account-page .button-outline:hover { background:#211a2c;border-color:#8063aa; }
+.account-page .text-button:hover { color:#ff8da7; }
+
+/* The product-detail footer now matches the storefront instead of inheriting the old green footer. */
+.sell-site>footer { background:#050507;color:#998da6;border-top:1px solid #211f27; }
+.sell-site>footer .brand { color:#fff; }

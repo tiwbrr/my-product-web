@@ -48,6 +48,16 @@ export type ChatMessage = {
   createdAt: string;
 };
 
+export type PushSubscriptionRecord = {
+  endpoint: string;
+  userId: string;
+  expirationTime: number | null;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+};
+
 export type GameCategory = {
   id: string;
   name: string;
