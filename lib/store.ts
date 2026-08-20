@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, ChatMessage, GameCategory, Product, PushSubscriptionRecord, Session, StoreSettings, User } from "@/lib/types";
+import type { AccountGender, ChatMessage, ContactChannel, GameCategory, Product, PushSubscriptionRecord, Session, StoreSettings, User } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -37,6 +37,18 @@ type StoreSettingsRow = {
   line_qr_image: string;
   facebook_url: string;
   youtube_playlist_url: string;
+  updated_at: string;
+};
+
+type ContactChannelRow = {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  icon_image: string;
+  qr_image: string;
+  sort_order: number;
+  created_at: string;
   updated_at: string;
 };
 
@@ -237,13 +249,22 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     .eq("id", 1)
     .maybeSingle();
   if (error?.code === "PGRST205" || error?.code === "42P01") {
-    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "" };
+    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "", contactChannels: [] };
   }
   if (error) throw databaseError("getStoreSettings", error);
   const row = data as StoreSettingsRow | null;
+  const contactChannels = await getContactChannels();
+  if (contactChannels.length) {
+    return row
+      ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at, contactChannels }
+      : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "", contactChannels };
+  }
+  const legacyChannels: ContactChannel[] = [];
+  if (row?.line_qr_image) legacyChannels.push({ id: "legacy-line", name: "LINE", description: "สแกน QR Code เพื่อเพิ่มเพื่อน", url: "", iconImage: "", qrImage: row.line_qr_image, sortOrder: 10, createdAt: row.updated_at, updatedAt: row.updated_at });
+  if (row?.facebook_url) legacyChannels.push({ id: "legacy-facebook", name: "Facebook", description: "เปิดหน้า Facebook ของร้าน", url: row.facebook_url, iconImage: "", qrImage: "", sortOrder: 20, createdAt: row.updated_at, updatedAt: row.updated_at });
   return row
-    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at }
-    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "" };
+    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at, contactChannels: legacyChannels }
+    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", updatedAt: "", contactChannels: [] };
 }
 
 export async function saveStoreSettings(settings: StoreSettings): Promise<StoreSettings> {
@@ -260,7 +281,57 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
     .single();
   if (error) throw databaseError("saveStoreSettings", error);
   const row = data as StoreSettingsRow;
-  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at };
+  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", updatedAt: row.updated_at, contactChannels: settings.contactChannels };
+}
+
+function toContactChannel(row: ContactChannelRow): ContactChannel {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    url: row.url,
+    iconImage: row.icon_image,
+    qrImage: row.qr_image,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function getContactChannels(): Promise<ContactChannel[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("contact_channels")
+    .select("id, name, description, url, icon_image, qr_image, sort_order, created_at, updated_at")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error?.code === "PGRST205" || error?.code === "42P01") return [];
+  if (error) throw databaseError("getContactChannels", error);
+  return (data as ContactChannelRow[]).map(toContactChannel);
+}
+
+export async function saveContactChannel(channel: ContactChannel): Promise<ContactChannel> {
+  const { data, error } = await getSupabaseAdmin().from("contact_channels").upsert({
+    id: channel.id,
+    name: channel.name,
+    description: channel.description,
+    url: channel.url,
+    icon_image: channel.iconImage,
+    qr_image: channel.qrImage,
+    sort_order: channel.sortOrder,
+    created_at: channel.createdAt,
+    updated_at: channel.updatedAt,
+  }).select("id, name, description, url, icon_image, qr_image, sort_order, created_at, updated_at").single();
+  if (error) throw databaseError("saveContactChannel", error);
+  return toContactChannel(data as ContactChannelRow);
+}
+
+export async function removeContactChannel(id: string): Promise<ContactChannel | null> {
+  const { data, error } = await getSupabaseAdmin().from("contact_channels")
+    .delete().eq("id", id)
+    .select("id, name, description, url, icon_image, qr_image, sort_order, created_at, updated_at")
+    .maybeSingle();
+  if (error) throw databaseError("removeContactChannel", error);
+  return data ? toContactChannel(data as ContactChannelRow) : null;
 }
 
 const chatRetentionMilliseconds = 7 * 24 * 60 * 60 * 1000;

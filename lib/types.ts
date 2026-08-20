@@ -38,6 +38,19 @@ export type StoreSettings = {
   facebookUrl: string;
   youtubePlaylistUrl: string;
   updatedAt: string;
+  contactChannels: ContactChannel[];
+};
+
+export type ContactChannel = {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  iconImage: string;
+  qrImage: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ChatMessage = {
