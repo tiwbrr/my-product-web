@@ -9,7 +9,7 @@ const messageLimit = 300;
 const cooldownSeconds = 5;
 
 type ToastMessage = ChatMessage & { toastId: string };
-type PushStatus = "unsupported" | "off" | "loading" | "on" | "denied" | "error";
+type PushStatus = "unsupported" | "insecure" | "unconfigured" | "off" | "loading" | "on" | "denied" | "error";
 
 function urlBase64ToUint8Array(value: string) {
   const padding = "=".repeat((4 - value.length % 4) % 4);
@@ -23,8 +23,9 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [characterCount, setCharacterCount] = useState(0);
   const [cooldown, setCooldown] = useState(0);
-  const [pushStatus, setPushStatus] = useState<PushStatus>("off");
+  const [pushStatus, setPushStatus] = useState<PushStatus>("loading");
   const [pushError, setPushError] = useState("");
+  const [vapidPublicKey, setVapidPublicKey] = useState("");
   const messageListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const knownMessageIdsRef = useRef(new Set(initialMessages.map((message) => message.id)));
@@ -32,7 +33,8 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
   const titleTimerRef = useRef<number | null>(null);
   const originalTitleRef = useRef("");
   const audioContextRef = useRef<AudioContext | null>(null);
-  const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+  const customSoundUrlRef = useRef("");
+  const customSoundRef = useRef<HTMLAudioElement | null>(null);
 
   const stopTitleFlash = useCallback(() => {
     if (titleTimerRef.current !== null) window.clearInterval(titleTimerRef.current);
@@ -51,21 +53,51 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
   }, [stopTitleFlash]);
 
   const playNotificationSound = useCallback(() => {
-    const context = audioContextRef.current;
-    if (!context || context.state !== "running") return;
-    const start = context.currentTime;
-    [0, 0.13].forEach((offset, index) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = index ? 880 : 660;
-      gain.gain.setValueAtTime(0.0001, start + offset);
-      gain.gain.exponentialRampToValueAtTime(0.14, start + offset + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.11);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start(start + offset);
-      oscillator.stop(start + offset + 0.12);
-    });
+    const playTwoBeatFallback = () => {
+      const context = audioContextRef.current;
+      if (!context) return;
+      void context.resume().then(() => {
+        const start = context.currentTime;
+        const compressor = context.createDynamicsCompressor();
+        compressor.threshold.value = -12;
+        compressor.knee.value = 12;
+        compressor.ratio.value = 4;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.2;
+        compressor.connect(context.destination);
+
+        let remainingBeats = 2;
+        [0, 0.26].forEach((offset, index) => {
+          const oscillator = context.createOscillator();
+          const gain = context.createGain();
+          oscillator.type = "triangle";
+          oscillator.frequency.value = index ? 980 : 740;
+          gain.gain.setValueAtTime(0.0001, start + offset);
+          gain.gain.exponentialRampToValueAtTime(0.38, start + offset + 0.018);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.19);
+          oscillator.connect(gain).connect(compressor);
+          oscillator.addEventListener("ended", () => {
+            gain.disconnect();
+            remainingBeats -= 1;
+            if (!remainingBeats) compressor.disconnect();
+          }, { once: true });
+          oscillator.start(start + offset);
+          oscillator.stop(start + offset + 0.2);
+        });
+      }).catch(() => undefined);
+    };
+
+    if (customSoundUrlRef.current) {
+      if (!customSoundRef.current) {
+        customSoundRef.current = new Audio(customSoundUrlRef.current);
+        customSoundRef.current.preload = "auto";
+        customSoundRef.current.volume = 1;
+      }
+      customSoundRef.current.currentTime = 0;
+      void customSoundRef.current.play().catch(playTwoBeatFallback);
+      return;
+    }
+    playTwoBeatFallback();
   }, []);
 
   const notifyIncomingMessage = useCallback((message: ChatMessage) => {
@@ -101,6 +133,12 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
     const unlockAudio = () => {
       if (!audioContextRef.current) audioContextRef.current = new AudioContext();
       void audioContextRef.current.resume();
+      if (customSoundUrlRef.current && !customSoundRef.current) {
+        customSoundRef.current = new Audio(customSoundUrlRef.current);
+        customSoundRef.current.preload = "auto";
+        customSoundRef.current.volume = 1;
+        customSoundRef.current.load();
+      }
     };
     const handleVisibility = () => {
       if (document.visibilityState === "visible") stopTitleFlash();
@@ -113,6 +151,8 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
       window.removeEventListener("keydown", unlockAudio);
       document.removeEventListener("visibilitychange", handleVisibility);
       stopTitleFlash();
+      customSoundRef.current?.pause();
+      customSoundRef.current = null;
       void audioContextRef.current?.close();
     };
   }, [stopTitleFlash]);
@@ -144,27 +184,54 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
   }, [refreshMessages]);
 
   useEffect(() => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window) || !vapidPublicKey) {
-      const timer = window.setTimeout(() => setPushStatus("unsupported"), 0);
-      return () => window.clearTimeout(timer);
-    }
+    let cancelled = false;
+    const preparePushNotifications = async () => {
+      if (!window.isSecureContext) {
+        setPushStatus("insecure");
+        return;
+      }
+      if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+        setPushStatus("unsupported");
+        return;
+      }
 
-    void navigator.serviceWorker.register("/sw.js").then(async (registration) => {
-      const subscription = await registration.pushManager.getSubscription();
-      setPushStatus(subscription ? "on" : Notification.permission === "denied" ? "denied" : "off");
-    }).catch(() => setPushStatus("error"));
+      try {
+        const response = await fetch("/api/push/config", { cache: "no-store" });
+        const config = await response.json() as { publicKey?: string; notificationSoundUrl?: string };
+        if (!response.ok || !config.publicKey) {
+          setPushStatus("unconfigured");
+          return;
+        }
+        if (cancelled) return;
+        setVapidPublicKey(config.publicKey);
+        customSoundUrlRef.current = config.notificationSoundUrl || "";
+        const registration = await navigator.serviceWorker.register("/sw.js");
+        const subscription = await registration.pushManager.getSubscription();
+        if (!cancelled) setPushStatus(subscription ? "on" : Notification.permission === "denied" ? "denied" : "off");
+      } catch {
+        if (!cancelled) {
+          setPushStatus("error");
+          setPushError("เตรียมระบบแจ้งเตือนไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่");
+        }
+      }
+    };
+    void preparePushNotifications();
 
     const handleServiceWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type === "CHAT_PUSH") void refreshMessages();
     };
     navigator.serviceWorker.addEventListener("message", handleServiceWorkerMessage);
-    return () => navigator.serviceWorker.removeEventListener("message", handleServiceWorkerMessage);
-  }, [refreshMessages, vapidPublicKey]);
+    return () => {
+      cancelled = true;
+      navigator.serviceWorker.removeEventListener("message", handleServiceWorkerMessage);
+    };
+  }, [refreshMessages]);
 
   const togglePushNotifications = async () => {
     setPushError("");
     setPushStatus("loading");
     try {
+      if (!vapidPublicKey) throw new Error("เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าระบบแจ้งเตือน");
       const registration = await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
       if (existing) {
@@ -199,6 +266,14 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
         throw new Error("บันทึกการแจ้งเตือนไม่สำเร็จ");
       }
       setPushStatus("on");
+      playNotificationSound();
+      void registration.showNotification("เปิดแจ้งเตือนแล้ว", {
+        body: "เมื่อมีข้อความใหม่ ระบบจะแจ้งเตือนแม้ไม่ได้เปิดหน้านี้อยู่",
+        icon: "/favicon.ico",
+        badge: "/favicon.ico",
+        tag: "push-enabled",
+        data: { url: "/#chat" },
+      }).catch(() => setPushError("เปิดแจ้งเตือนแล้ว แต่ระบบไม่สามารถแสดงข้อความทดสอบได้"));
     } catch (error) {
       setPushStatus("error");
       setPushError(error instanceof Error ? error.message : "เปิดการแจ้งเตือนไม่สำเร็จ");
@@ -208,15 +283,17 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
   const pushLabel = pushStatus === "on" ? "🔔 เปิดแจ้งเตือนแล้ว"
     : pushStatus === "loading" ? "กำลังตั้งค่า..."
       : pushStatus === "denied" ? "🔕 เบราว์เซอร์บล็อกการแจ้งเตือน"
-        : pushStatus === "unsupported" ? "อุปกรณ์นี้ไม่รองรับการแจ้งเตือน"
-          : "🔔 เปิดแจ้งเตือนข้อความใหม่";
+        : pushStatus === "insecure" ? "🔒 ต้องเปิดเว็บไซต์ผ่าน HTTPS"
+          : pushStatus === "unconfigured" ? "⚙️ เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการแจ้งเตือน"
+            : pushStatus === "unsupported" ? "อุปกรณ์นี้ไม่รองรับการแจ้งเตือน"
+              : "🔔 เปิดแจ้งเตือนข้อความใหม่";
 
   return <section className="community-chat" id="chat">
     <div className="community-heading">
       <div><span>MEMBER COMMUNITY</span><h2>แชทสมาชิก</h2></div>
       <div className="chat-heading-actions">
         <p>ล็อกอินในชื่อ <b>{user.name}</b> · ระบบเก็บข้อความ 7 วัน</p>
-        <button className={`push-toggle push-${pushStatus}`} type="button" onClick={togglePushNotifications} disabled={pushStatus === "loading" || pushStatus === "unsupported"}>{pushLabel}</button>
+        <button className={`push-toggle push-${pushStatus}`} type="button" onClick={togglePushNotifications} disabled={["loading", "unsupported", "insecure", "unconfigured"].includes(pushStatus)}>{pushLabel}</button>
       </div>
     </div>
     {pushError && <p className="chat-error" role="alert">{pushError}</p>}
