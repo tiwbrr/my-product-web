@@ -19,7 +19,10 @@ export function StoreHeader({ user }: { user: SafeUser | null }) {
     <header className="game-header">
       <Link href="/#categories" className="game-header-category">หมวดหมู่เกม</Link>
       <Link href="/" className="game-brand"><span>K</span><b>KUOZO SHOP</b></Link>
-      <button className="hamburger-button" onClick={() => setOpen(true)} aria-label="เปิดเมนู" aria-expanded={open}><i></i><i></i><i></i></button>
+      <div className="game-header-actions">
+        {!user && <Link href="/login" className="store-login-button">เข้าสู่ระบบ</Link>}
+        <button className="hamburger-button" onClick={() => setOpen(true)} aria-label="เปิดเมนู" aria-expanded={open}><i></i><i></i><i></i></button>
+      </div>
     </header>
     {open && <div className="menu-overlay" onMouseDown={(event) => { if (event.currentTarget === event.target) closeMenu(); }}>
       <aside className="menu-drawer" aria-label="เมนูหลัก">

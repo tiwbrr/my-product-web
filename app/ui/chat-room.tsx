@@ -17,6 +17,14 @@ function urlBase64ToUint8Array(value: string) {
   return Uint8Array.from(window.atob(base64), (character) => character.charCodeAt(0));
 }
 
+function NotificationBell({ muted }: { muted: boolean }) {
+  return <svg className="notification-bell" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+    <path d="M10 21h4" />
+    {muted && <path className="notification-bell-slash" d="M4 4l16 16" />}
+  </svg>;
+}
+
 export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMessage[]; user: SafeUser }) {
   const [state, formAction, pending] = useActionState(sendChatMessageAction, initialState);
   const [messages, setMessages] = useState(initialMessages);
@@ -280,20 +288,26 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
     }
   };
 
-  const pushLabel = pushStatus === "on" ? "🔔 เปิดแจ้งเตือนแล้ว"
-    : pushStatus === "loading" ? "กำลังตั้งค่า..."
-      : pushStatus === "denied" ? "🔕 เบราว์เซอร์บล็อกการแจ้งเตือน"
-        : pushStatus === "insecure" ? "🔒 ต้องเปิดเว็บไซต์ผ่าน HTTPS"
-          : pushStatus === "unconfigured" ? "⚙️ เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการแจ้งเตือน"
-            : pushStatus === "unsupported" ? "อุปกรณ์นี้ไม่รองรับการแจ้งเตือน"
-              : "🔔 เปิดแจ้งเตือนข้อความใหม่";
+  const soundEnabled = pushStatus === "on";
+  const pushLabel = pushStatus === "loading" ? "กำลังตั้งค่า..."
+    : `เสียงแจ้งเตือน : ${soundEnabled ? "เปิด" : "ปิด"}`;
 
   return <section className="community-chat" id="chat">
     <div className="community-heading">
       <div><span>MEMBER COMMUNITY</span><h2>แชทสมาชิก</h2></div>
       <div className="chat-heading-actions">
         <p>ล็อกอินในชื่อ <b>{user.name}</b></p>
-        <button className={`push-toggle push-${pushStatus}`} type="button" onClick={togglePushNotifications} disabled={["loading", "unsupported", "insecure", "unconfigured"].includes(pushStatus)}>{pushLabel}</button>
+        <button
+          className={`push-toggle push-${pushStatus}`}
+          type="button"
+          onClick={togglePushNotifications}
+          disabled={["loading", "unsupported", "insecure", "unconfigured"].includes(pushStatus)}
+          aria-label={pushLabel}
+          aria-pressed={soundEnabled}
+        >
+          <NotificationBell muted={!soundEnabled} />
+          <span>{pushLabel}</span>
+        </button>
       </div>
     </div>
     {pushError && <p className="chat-error" role="alert">{pushError}</p>}
