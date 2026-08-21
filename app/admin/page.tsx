@@ -3,6 +3,7 @@ import { deleteProductAction } from "@/app/actions/products";
 import { deleteGameCategoryAction, updateGameCategoryIconAction } from "@/app/actions/categories";
 import { logoutAction } from "@/app/actions/auth";
 import { ContactSettingsForm } from "@/app/ui/contact-settings-form";
+import { AdminNav } from "@/app/ui/admin-nav";
 import { GameCategoryForm } from "@/app/ui/game-category-form";
 import { ProductForm } from "@/app/ui/product-form";
 import { getMemberCount, requireAdmin } from "@/lib/auth";
@@ -23,14 +24,7 @@ export default async function AdminPage() {
     <aside className="admin-sidebar">
       <Link href="/" className="brand brand-light"><span>K</span> KUOZO SHOP</Link>
       <div className="admin-label">ADMIN CONSOLE</div>
-      <nav>
-        <a href="#overview" className="active"><span>⌂</span> ภาพรวม</a>
-        <a href="#contacts"><span>◎</span> ติดต่อ Playlist และเสียง</a>
-        <a href="#categories"><span>●</span> หมวดเกม</a>
-        <a href="#add-product"><span>＋</span> เพิ่มสินค้า</a>
-        <a href="#inventory"><span>□</span> รายการสินค้า</a>
-        <Link href="/"><span>↗</span> ดูหน้าร้าน</Link>
-      </nav>
+      <AdminNav />
       <div className="admin-profile"><div>{admin.name.charAt(0)}</div><span><b>{admin.name}</b><small>{admin.email}</small></span></div>
       <form action={logoutAction}><button>ออกจากระบบ →</button></form>
     </aside>

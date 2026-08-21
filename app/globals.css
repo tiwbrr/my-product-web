@@ -346,3 +346,5 @@ footer { padding:35px clamp(24px,5vw,72px); background:#111b16; display:flex; ju
   .contact-admin-block { padding:17px; }
   .contact-channel-create,.contact-channel-editor { padding:15px; }
 }
+.admin-main [id] { scroll-margin-top:24px; }
+@media (max-width:680px) { .admin-main [id] { scroll-margin-top:88px; } }
