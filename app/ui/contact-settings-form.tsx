@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { FormSubmitButton } from "@/app/ui/form-submit-button";
 import { deleteContactChannelAction, saveContactChannelAction, saveNotificationSoundAction, savePlaylistSettingsAction, type SettingsState } from "@/app/actions/settings";
 import type { ContactChannel, StoreSettings } from "@/lib/types";
 
@@ -29,7 +30,7 @@ function ContactChannelForm({ channel }: { channel?: ContactChannel }) {
       {state.success && <p className="form-success" role="status">{state.success}</p>}
       <button className="button button-dark button-wide" disabled={pending}>{pending ? "กำลังบันทึก..." : channel ? "บันทึกการแก้ไข" : "+ เพิ่มช่องทางติดต่อ"}</button>
     </form>
-    {channel && <form action={deleteContactChannelAction} className="contact-channel-delete"><input type="hidden" name="id" value={channel.id} /><button type="submit">ลบช่องทางนี้</button></form>}
+    {channel && <form action={deleteContactChannelAction} className="contact-channel-delete"><input type="hidden" name="id" value={channel.id} /><FormSubmitButton pendingLabel="กำลังลบ...">ลบช่องทางนี้</FormSubmitButton></form>}
   </div>;
 }
 

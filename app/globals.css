@@ -348,3 +348,17 @@ footer { padding:35px clamp(24px,5vw,72px); background:#111b16; display:flex; ju
 }
 .admin-main [id] { scroll-margin-top:24px; }
 @media (max-width:680px) { .admin-main [id] { scroll-margin-top:88px; } }
+
+/* Loading feedback for route changes and server actions */
+.page-loading { min-height:100vh;display:grid;place-content:center;justify-items:center;gap:8px;background:var(--cream);color:var(--ink);text-align:center; }
+.page-loading strong { font:700 18px var(--font-geist);letter-spacing:.03em; }
+.page-loading>span { color:var(--muted);font-size:12px; }
+.page-loading-spinner { width:54px;height:54px;position:relative;margin-bottom:12px;animation:loading-spin 1.2s linear infinite; }
+.page-loading-spinner i { width:14px;height:14px;border-radius:50%;position:absolute;background:var(--orange);box-shadow:0 4px 12px #d8623638; }
+.page-loading-spinner i:nth-child(1) { top:0;left:20px; }
+.page-loading-spinner i:nth-child(2) { right:2px;bottom:7px;background:var(--lime); }
+.page-loading-spinner i:nth-child(3) { left:2px;bottom:7px;background:#7950c7; }
+.button-spinner { width:1em;height:1em;display:inline-block;vertical-align:-.15em;margin-right:7px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:loading-spin .65s linear infinite; }
+button[aria-busy="true"] { cursor:wait;opacity:.72; }
+@keyframes loading-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .page-loading-spinner,.button-spinner { animation-duration:2s; } }
