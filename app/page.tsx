@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ChatRoom } from "@/app/ui/chat-room";
 import { ContactSection } from "@/app/ui/contact-section";
 import { ProductCatalog } from "@/app/ui/product-catalog";
@@ -22,7 +23,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Cat
   return <main className="sell-site">
     <StoreHeader user={user} />
     <section className="sell-hero">
-      <div className="sell-hero-banner"><img src="/og-kuozo-shop.png" alt="Kuozo Shop Game Account Store" /></div>
+      <div className="sell-hero-banner"><Image src="/hero-kuozo-shop.webp" width={1400} height={735} sizes="(max-width: 900px) 92vw, 52vw" fetchPriority="high" alt="Kuozo Shop Game Account Store" /></div>
       <div className="sell-hero-copy"><span className="sell-kicker">WELCOME TO</span><h1>KUOZO SHOP</h1><p>ร้านรวมไอดีเกม Genshin, Wuthering Wave และเกมอื่นๆ<br />เลือกดูไอดีที่ต้องการได้จากหมวดหมู่ด้านล่าง</p><a href="#categories">เลือกหมวดหมู่เกม <b>↓</b></a></div>
     </section>
     <section className="sell-notice"><b>วิธีเลือกซื้อ</b><p>กดเมนูสามขีดมุมขวาบน หรือเลือกหมวดเกมด้านล่าง จากนั้นกดไอดีที่สนใจเพื่อดูรูปและรายละเอียดทั้งหมด หากต้องการสั่งซื้อให้ติดต่อร้านผ่าน LINE หรือ Facebook</p></section>

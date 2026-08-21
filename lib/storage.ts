@@ -47,7 +47,7 @@ export async function uploadImage(file: File, folder: "products" | "contacts" | 
   const objectPath = `${folder}/${randomUUID()}.${extension}`;
   const { error } = await getSupabaseAdmin().storage
     .from(bucket)
-    .upload(objectPath, await file.arrayBuffer(), { contentType: file.type, upsert: false });
+    .upload(objectPath, await file.arrayBuffer(), { contentType: file.type, cacheControl: "31536000", upsert: false });
   if (error) throw new Error(`อัปโหลดรูปไม่สำเร็จ: ${error.message}`);
   return getSupabaseAdmin().storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
 }
@@ -60,7 +60,7 @@ export async function uploadNotificationSound(file: File) {
   const objectPath = `notification-sounds/${randomUUID()}.${extension}`;
   const { error } = await getSupabaseAdmin().storage
     .from(bucket)
-    .upload(objectPath, await file.arrayBuffer(), { contentType: file.type, upsert: false });
+    .upload(objectPath, await file.arrayBuffer(), { contentType: file.type, cacheControl: "31536000", upsert: false });
   if (error) throw new Error(`อัปโหลดเสียงไม่สำเร็จ: ${error.message}`);
   return getSupabaseAdmin().storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
 }

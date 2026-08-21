@@ -18,6 +18,10 @@ type SessionRow = {
   expires_at: string;
 };
 
+type SessionUserRow = {
+  store_users: UserRow | UserRow[] | null;
+};
+
 type ProductRow = {
   id: string;
   name: string;
@@ -200,6 +204,19 @@ export async function getSession(tokenHash: string): Promise<Session | null> {
   return data ? toSession(data as SessionRow) : null;
 }
 
+export async function getSessionUser(tokenHash: string): Promise<User | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("sessions")
+    .select("store_users!inner(id, name, email, password_hash, role, created_at)")
+    .eq("token_hash", tokenHash)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (error) throw databaseError("getSessionUser", error);
+  const relatedUser = (data as SessionUserRow | null)?.store_users;
+  const user = Array.isArray(relatedUser) ? relatedUser[0] : relatedUser;
+  return user ? toUser(user) : null;
+}
+
 export async function saveProduct(product: Product): Promise<Product> {
   const { data, error } = await getSupabaseAdmin()
     .from("products")
@@ -244,17 +261,19 @@ export async function getMemberCount(): Promise<number> {
 }
 
 export async function getStoreSettings(): Promise<StoreSettings> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("store_settings")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle();
+  const [{ data, error }, contactChannels] = await Promise.all([
+    getSupabaseAdmin()
+      .from("store_settings")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle(),
+    getContactChannels(),
+  ]);
   if (error?.code === "PGRST205" || error?.code === "42P01") {
-    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", notificationSoundUrl: "", updatedAt: "", contactChannels: [] };
+    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", notificationSoundUrl: "", updatedAt: "", contactChannels };
   }
   if (error) throw databaseError("getStoreSettings", error);
   const row = data as StoreSettingsRow | null;
-  const contactChannels = await getContactChannels();
   if (contactChannels.length) {
     return row
       ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels }
@@ -354,14 +373,16 @@ export async function removeExpiredChatMessages(): Promise<void> {
   if (error) throw databaseError("removeExpiredChatMessages", error);
 }
 
-export async function getChatMessages(): Promise<ChatMessage[]> {
-  await removeExpiredChatMessages();
+export async function getChatMessages(after?: string): Promise<ChatMessage[]> {
   const cutoff = new Date(Date.now() - chatRetentionMilliseconds).toISOString();
-  const { data, error } = await getSupabaseAdmin()
+  const afterTime = after ? Date.parse(after) : Number.NaN;
+  const query = getSupabaseAdmin()
     .from("chat_messages")
     .select("id, user_id, message, created_at, store_users(name)")
-    .gte("created_at", cutoff)
     .order("created_at", { ascending: true });
+  const { data, error } = Number.isFinite(afterTime) && afterTime > Date.parse(cutoff)
+    ? await query.gt("created_at", new Date(afterTime).toISOString())
+    : await query.gte("created_at", cutoff);
   if (error) throw databaseError("getChatMessages", error);
   return (data as ChatMessageRow[]).map((row) => {
     const relatedUser = Array.isArray(row.store_users) ? row.store_users[0] : row.store_users;

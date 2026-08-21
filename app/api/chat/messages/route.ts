@@ -9,12 +9,9 @@ export async function GET(request: Request) {
 
   const after = new URL(request.url).searchParams.get("after");
   const afterTime = after ? Date.parse(after) : Number.NaN;
-  const messages = await getChatMessages();
-  const filteredMessages = Number.isFinite(afterTime)
-    ? messages.filter((message) => Date.parse(message.createdAt) > afterTime)
-    : messages;
+  const messages = await getChatMessages(Number.isFinite(afterTime) ? new Date(afterTime).toISOString() : undefined);
 
-  return Response.json({ messages: filteredMessages }, {
+  return Response.json({ messages }, {
     headers: { "Cache-Control": "no-store, max-age=0" },
   });
 }

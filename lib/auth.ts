@@ -1,11 +1,12 @@
 import { createHash, randomBytes, randomUUID, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { addSession, addUser, getMemberCount as countMembers, getSession, getUserByEmail, getUserById } from "@/lib/store";
+import { addSession, addUser, getMemberCount as countMembers, getSessionUser, getUserByEmail } from "@/lib/store";
 import type { SafeUser, User } from "@/lib/types";
 
 export const SESSION_COOKIE = "my_store_session";
 const sessionDuration = 7 * 24 * 60 * 60 * 1000;
+let adminReady: Promise<void> | undefined;
 
 function scrypt(password: string, salt: string): Promise<Buffer> {
   return new Promise((resolve, reject) => nodeScrypt(password, salt, 64, (error, key) => error ? reject(error) : resolve(key as Buffer)));
@@ -28,6 +29,16 @@ export async function ensureAdmin() {
   }
 }
 
+function ensureAdminOnce() {
+  adminReady ??= ensureAdmin()
+    .then(() => undefined)
+    .catch((error) => {
+      adminReady = undefined;
+      throw error;
+    });
+  return adminReady;
+}
+
 export async function createSession(userId: string) {
   const token = randomBytes(32).toString("base64url");
   await addSession({ tokenHash: hashToken(token), userId, expiresAt: new Date(Date.now() + sessionDuration).toISOString() });
@@ -36,12 +47,10 @@ export async function createSession(userId: string) {
 }
 
 export async function getCurrentUser(): Promise<SafeUser | null> {
-  await ensureAdmin();
+  await ensureAdminOnce();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  const session = await getSession(hashToken(token));
-  if (!session) return null;
-  const user = await getUserById(session.userId);
+  const user = await getSessionUser(hashToken(token));
   return user ? toSafeUser(user) : null;
 }
 

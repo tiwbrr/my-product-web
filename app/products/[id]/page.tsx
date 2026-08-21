@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ContactSection } from "@/app/ui/contact-section";
 import { ProductGallery } from "@/app/ui/product-gallery";
+import { PaginatedList } from "@/app/ui/paginated-list";
 import { ProductCard } from "@/app/ui/product-card";
 import { StoreHeader } from "@/app/ui/store-header";
 import { getCurrentUser } from "@/lib/auth";
@@ -36,7 +37,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
         <h2>{hasCatalogContext(rawSearchParams) ? "ไอดีอื่น ๆ จากผลการค้นหานี้" : "ไอดีอื่น ๆ ที่คุณอาจสนใจ"}</h2>
         <p>{otherProducts.length} รายการ</p>
       </div>
-      <div className="sell-product-grid">{otherProducts.map((item) => <ProductCard product={item} searchParams={serializedFilters} key={item.id} />)}</div>
+      <PaginatedList listClassName="sell-product-grid" itemLabel="รายการสินค้า">{otherProducts.map((item) => <ProductCard product={item} searchParams={serializedFilters} key={item.id} />)}</PaginatedList>
     </section>}
     <ContactSection settings={settings} />
     <footer><Link href="/" className="brand brand-light"><span>K</span> KUOZO SHOP</Link><p>© 2026 Kuozo Shop. Game account store.</p></footer>

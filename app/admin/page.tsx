@@ -5,6 +5,7 @@ import { logoutAction } from "@/app/actions/auth";
 import { ContactSettingsForm } from "@/app/ui/contact-settings-form";
 import { AdminNav } from "@/app/ui/admin-nav";
 import { FormSubmitButton } from "@/app/ui/form-submit-button";
+import { PaginatedList } from "@/app/ui/paginated-list";
 import { GameCategoryForm } from "@/app/ui/game-category-form";
 import { ProductForm } from "@/app/ui/product-form";
 import { getMemberCount, requireAdmin } from "@/lib/auth";
@@ -37,10 +38,10 @@ export default async function AdminPage() {
       <section className="admin-panel" id="add-product"><div className="panel-heading"><div><span className="panel-icon">＋</span><span><h2>เพิ่มไอดีเกมใหม่</h2><p>กรอกรายละเอียดและเลือกรูปภาพได้หลายรูป</p></span></div></div><ProductForm categories={categories} /></section>
       <section className="inventory-section" id="inventory">
         <div className="section-heading admin-section-heading"><div><span className="eyebrow">ID INVENTORY</span><h2>รายการไอดีเกม</h2></div><p>{products.length} รายการ</p></div>
-        <div className="inventory-list">{products.map((product) => <details className="inventory-item" key={product.id}>
+        {!!products.length && <PaginatedList listClassName="inventory-list" itemLabel="รายการสินค้า">{products.map((product) => <details className="inventory-item" key={product.id}>
           <summary><div className="inventory-thumb">{product.images[0] ? <img src={product.images[0]} alt="" /> : <span>{product.name.charAt(0)}</span>}</div><div className="inventory-name"><b>{product.name}</b><small>{product.category} · {product.accountGender === "male" ? "หลักชาย" : product.accountGender === "female" ? "หลักหญิง" : "ยังไม่ระบุ"} · {product.images.length} รูป · รหัส {product.id.slice(0, 8)}</small></div><strong>฿{product.price.toLocaleString("th-TH")}</strong><span className={product.stock ? "stock-ok" : "stock-out"}>{product.stock ? `${product.stock} ชิ้น` : "สินค้าหมด"}</span><i>แก้ไข⌄</i></summary>
           <div className="inventory-edit"><ProductForm product={product} categories={categories} compact /><form action={deleteProductAction}><input type="hidden" name="id" value={product.id} /><FormSubmitButton className="delete-product" pendingLabel="กำลังลบ...">ลบไอดีนี้ออกจากร้าน</FormSubmitButton></form></div>
-        </details>)}</div>
+        </details>)}</PaginatedList>}
         {!products.length && <div className="empty-state"><h3>ยังไม่มีสินค้า</h3><p>เพิ่มสินค้าชิ้นแรกจากฟอร์มด้านบนได้เลย</p></div>}
       </section>
     </div>
