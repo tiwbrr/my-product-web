@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User } from "@/lib/types";
+import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User, YouTubeQueueItem } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -80,6 +80,12 @@ type GameCategoryRow = {
   name: string;
   icon: string;
   sort_order: number;
+};
+
+type YouTubeQueueRow = {
+  id: string;
+  video_id: string;
+  created_at: string;
 };
 
 function databaseError(operation: string, error: { message: string; code?: string }) {
@@ -325,6 +331,47 @@ export async function getUserCount(): Promise<number> {
     .select("id", { count: "exact", head: true });
   if (error) throw databaseError("getUserCount", error);
   return count ?? 0;
+}
+
+function toYouTubeQueueItem(row: YouTubeQueueRow): YouTubeQueueItem {
+  return {
+    id: row.id,
+    videoId: row.video_id,
+    createdAt: row.created_at,
+  };
+}
+
+export async function getYouTubeQueue(): Promise<YouTubeQueueItem[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("youtube_queue")
+    .select("id, video_id, created_at")
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
+  if (error?.code === "PGRST205" || error?.code === "42P01") return [];
+  if (error) throw databaseError("getYouTubeQueue", error);
+  return (data as YouTubeQueueRow[]).map(toYouTubeQueueItem);
+}
+
+export async function addYouTubeQueueItem(id: string, videoId: string, userId: string): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("add_youtube_queue_item", {
+    p_id: id,
+    p_video_id: videoId,
+    p_user_id: userId,
+  });
+  if (error?.code === "23505") throw new Error("DUPLICATE_YOUTUBE_VIDEO", { cause: error });
+  if (error?.message.includes("YOUTUBE_QUEUE_FULL")) throw new Error("YOUTUBE_QUEUE_FULL", { cause: error });
+  if (error) throw databaseError("addYouTubeQueueItem", error);
+}
+
+export async function removeYouTubeQueueItem(id: string): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("remove_youtube_queue_item", { p_id: id });
+  if (error) throw databaseError("removeYouTubeQueueItem", error);
+}
+
+export async function completeYouTubeQueueItem(id: string): Promise<boolean> {
+  const { data, error } = await getSupabaseAdmin().rpc("complete_youtube_queue_item", { p_id: id });
+  if (error) throw databaseError("completeYouTubeQueueItem", error);
+  return data === true;
 }
 
 export async function getStoreSettings(): Promise<StoreSettings> {

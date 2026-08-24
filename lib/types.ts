@@ -49,6 +49,12 @@ export type StoreSettings = {
   contactChannels: ContactChannel[];
 };
 
+export type YouTubeQueueItem = {
+  id: string;
+  videoId: string;
+  createdAt: string;
+};
+
 export type ContactChannel = {
   id: string;
   name: string;
