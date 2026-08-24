@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, ChatMessage, ContactChannel, GameCategory, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User } from "@/lib/types";
+import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -207,6 +207,32 @@ export async function removeUser(id: string): Promise<void> {
     .eq("id", id)
     .neq("role", "admin");
   if (error) throw databaseError("removeUser", error);
+}
+
+export async function createPasswordResetToken(token: PasswordResetToken): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("create_store_password_reset_token", {
+    p_id: token.id,
+    p_user_id: token.userId,
+    p_token_hash: token.tokenHash,
+    p_expires_at: token.expiresAt,
+  });
+  if (error) throw databaseError("createPasswordResetToken", error);
+}
+
+export async function removePasswordResetToken(tokenHash: string): Promise<void> {
+  const { error } = await getSupabaseAdmin()
+    .from("password_reset_tokens")
+    .delete()
+    .eq("token_hash", tokenHash);
+  if (error) throw databaseError("removePasswordResetToken", error);
+}
+
+export async function resetUserPassword(tokenHash: string, passwordHash: string): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("reset_store_user_password", {
+    p_token_hash: tokenHash,
+    p_password_hash: passwordHash,
+  });
+  if (error) throw databaseError("resetUserPassword", error);
 }
 
 export async function addSession(session: Session): Promise<void> {

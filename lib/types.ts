@@ -17,6 +17,13 @@ export type Session = {
   expiresAt: string;
 };
 
+export type PasswordResetToken = {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: string;
+};
+
 export type AccountGender = "male" | "female" | "unspecified";
 
 export type Product = {

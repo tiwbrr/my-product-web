@@ -16,6 +16,7 @@ export function AuthForm({ mode, next = "" }: { mode: "login" | "register"; next
       {register && <label>ชื่อที่ใช้แสดง<input name="name" autoComplete="name" placeholder="เช่น พิมพ์ชนก" required minLength={2} /></label>}
       <label>อีเมล<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label>
       <label>รหัสผ่าน<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="อย่างน้อย 8 ตัวอักษร" required minLength={8} /></label>
+      {!register && <p className="forgot-password-link"><Link href="/forgot-password">ลืมรหัสผ่าน?</Link></p>}
       {register && <label>ยืนยันรหัสผ่าน<input name="confirmPassword" type="password" autoComplete="new-password" placeholder="กรอกรหัสผ่านอีกครั้ง" required minLength={8} /></label>}
       {state.error && <p className="form-error" role="alert">{state.error}</p>}
       <button className="button button-dark button-wide" disabled={pending}>{pending ? "กำลังดำเนินการ..." : register ? "สร้างบัญชีสมาชิก" : "เข้าสู่ระบบ"}</button>
