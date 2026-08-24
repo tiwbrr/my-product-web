@@ -35,7 +35,8 @@ export async function loginAction(_state: AuthState, formData: FormData): Promis
   const user = await getUserByEmail(email);
   if (!user || !(await verifyPassword(password, user.passwordHash))) return { error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" };
   await createSession(user.id);
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : user.role === "admin" ? "/admin" : "/account");
+  const defaultDestination = user.role === "admin" || user.role === "manager" ? "/admin" : "/account";
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : defaultDestination);
 }
 
 export async function logoutAction() {

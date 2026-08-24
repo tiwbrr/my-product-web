@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { addGameCategory, getGameCategory, removeGameCategory, updateGameCategoryIcon } from "@/lib/store";
 import { removeImage, uploadImage } from "@/lib/storage";
 
@@ -12,7 +12,7 @@ export async function addGameCategoryAction(
   _state: CategoryState,
   formData: FormData,
 ): Promise<CategoryState> {
-  await requireAdmin();
+  await requireStaff();
   const nameValue = formData.get("name");
   const name = typeof nameValue === "string" ? nameValue.trim() : "";
   if (name.length < 2) return { error: "กรุณาใส่ชื่อเกมอย่างน้อย 2 ตัวอักษร" };
@@ -32,7 +32,7 @@ export async function addGameCategoryAction(
 }
 
 export async function deleteGameCategoryAction(formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const id = formData.get("id");
   if (typeof id !== "string") return;
   const category = await removeGameCategory(id);
@@ -42,7 +42,7 @@ export async function deleteGameCategoryAction(formData: FormData) {
 }
 
 export async function updateGameCategoryIconAction(formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const id = formData.get("id");
   const file = formData.get("icon");
   if (typeof id !== "string" || !(file instanceof File) || file.size === 0) return;

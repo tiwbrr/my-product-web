@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { getStoreSettings, removeContactChannel, saveContactChannel, saveStoreSettings } from "@/lib/store";
 import { removeImage, removeStoreAsset, uploadImage, uploadNotificationSound } from "@/lib/storage";
 import { normalizeYouTubePlaylistUrl } from "@/lib/youtube";
@@ -27,7 +27,7 @@ export async function savePlaylistSettingsAction(
   _state: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  await requireAdmin();
+  await requireStaff();
   const current = await getStoreSettings();
   const input = text(formData, "youtubePlaylistUrl");
   const normalized = input ? normalizeYouTubePlaylistUrl(input) : "";
@@ -47,7 +47,7 @@ export async function saveNotificationSoundAction(
   _state: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  await requireAdmin();
+  await requireStaff();
   const current = await getStoreSettings();
   const removeSound = formData.get("removeSound") === "on";
   const soundFile = formData.get("notificationSound");
@@ -80,7 +80,7 @@ export async function saveContactChannelAction(
   _state: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  await requireAdmin();
+  await requireStaff();
   const settings = await getStoreSettings();
   const id = text(formData, "id");
   const current = id ? settings.contactChannels.find((channel) => channel.id === id) : undefined;
@@ -142,7 +142,7 @@ export async function saveContactChannelAction(
 }
 
 export async function deleteContactChannelAction(formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const id = text(formData, "id");
   if (!id) return;
   const removed = await removeContactChannel(id);

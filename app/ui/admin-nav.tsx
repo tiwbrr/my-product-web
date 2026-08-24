@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const adminSections = [
   { id: "overview", icon: "⌂", label: "ภาพรวม" },
+  { id: "members", icon: "♙", label: "จัดการสมาชิก", adminOnly: true },
   { id: "contacts", icon: "◎", label: "ติดต่อ Playlist และเสียง" },
   { id: "categories", icon: "●", label: "หมวดเกม" },
   { id: "add-product", icon: "＋", label: "เพิ่มสินค้า" },
@@ -13,11 +14,15 @@ const adminSections = [
 
 type AdminSectionId = (typeof adminSections)[number]["id"];
 
-export function AdminNav() {
+export function AdminNav({ canManageUsers }: { canManageUsers: boolean }) {
   const [activeSection, setActiveSection] = useState<AdminSectionId>("overview");
+  const visibleSections = useMemo(
+    () => adminSections.filter((section) => !("adminOnly" in section) || !section.adminOnly || canManageUsers),
+    [canManageUsers],
+  );
 
   useEffect(() => {
-    const sections = adminSections
+    const sections = visibleSections
       .map(({ id }) => document.getElementById(id))
       .filter((section): section is HTMLElement => section !== null);
     let animationFrame = 0;
@@ -55,10 +60,10 @@ export function AdminNav() {
       window.removeEventListener("resize", scheduleUpdate);
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
     };
-  }, []);
+  }, [visibleSections]);
 
   return <nav aria-label="เมนูจัดการร้าน">
-    {adminSections.map(({ id, icon, label }) => <a
+    {visibleSections.map(({ id, icon, label }) => <a
       href={`#${id}`}
       className={activeSection === id ? "active" : undefined}
       aria-current={activeSection === id ? "location" : undefined}

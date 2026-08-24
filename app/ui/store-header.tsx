@@ -16,6 +16,7 @@ export function StoreHeader({ user }: { user: SafeUser | null }) {
     return () => { window.removeEventListener("keydown", close); document.body.style.overflow = ""; };
   }, [open]);
   const closeMenu = () => setOpen(false);
+  const canManageStore = user?.role === "admin" || user?.role === "manager";
   return <>
     <header className="game-header">
       <Link href="/#categories" className="game-header-category">หมวดหมู่เกม</Link>
@@ -28,7 +29,7 @@ export function StoreHeader({ user }: { user: SafeUser | null }) {
     {open && <div className="menu-overlay" onMouseDown={(event) => { if (event.currentTarget === event.target) closeMenu(); }}>
       <aside className="menu-drawer" aria-label="เมนูหลัก">
         <div className="menu-drawer-head"><span>MENU</span><button onClick={closeMenu} aria-label="ปิดเมนู">×</button></div>
-        <nav><Link href="/" onClick={closeMenu}><span>01</span>หน้าหลัก</Link><Link href="/#categories" onClick={closeMenu}><span>02</span>หมวดหมู่เกม</Link><Link href="/#products" onClick={closeMenu}><span>03</span>รายการไอดีทั้งหมด</Link><Link href="/#chat" onClick={closeMenu}><span>04</span>แชทสมาชิก</Link><Link href="/#contact" onClick={closeMenu}><span>05</span>ติดต่อร้านค้า</Link>{user?.role === "admin" && <Link href="/admin" onClick={closeMenu}><span>06</span>จัดการร้าน</Link>}</nav>
+        <nav><Link href="/" onClick={closeMenu}><span>01</span>หน้าหลัก</Link><Link href="/#categories" onClick={closeMenu}><span>02</span>หมวดหมู่เกม</Link><Link href="/#products" onClick={closeMenu}><span>03</span>รายการไอดีทั้งหมด</Link><Link href="/#chat" onClick={closeMenu}><span>04</span>แชทสมาชิก</Link><Link href="/#contact" onClick={closeMenu}><span>05</span>ติดต่อร้านค้า</Link>{canManageStore && <Link href="/admin" onClick={closeMenu}><span>06</span>จัดการร้าน</Link>}</nav>
         <div className="menu-account">{user ? <><Link href="/account" onClick={closeMenu}>บัญชีของ {user.name}</Link><form action={logoutAction}><FormSubmitButton pendingLabel="กำลังออกจากระบบ...">ออกจากระบบ</FormSubmitButton></form></> : <><Link href="/login" onClick={closeMenu}>เข้าสู่ระบบ</Link><Link href="/register" onClick={closeMenu}>สมัครสมาชิก</Link></>}</div>
         <small>KUOZO SHOP · GAME ACCOUNT STORE</small>
       </aside>

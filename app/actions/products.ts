@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { getProduct, removeProduct, saveProduct } from "@/lib/store";
 import { removeImage, uploadImage } from "@/lib/storage";
 import { MAX_PRODUCT_IMAGES } from "@/lib/product-constraints";
@@ -18,7 +18,7 @@ export async function saveProductAction(
   _state: ProductState,
   formData: FormData,
 ): Promise<ProductState> {
-  await requireAdmin();
+  await requireStaff();
   const id = text(formData, "id");
   const existing = id ? await getProduct(id) : null;
   if (id && !existing) return { error: "ไม่พบสินค้าที่ต้องการแก้ไข" };
@@ -83,7 +83,7 @@ export async function saveProductAction(
 }
 
 export async function deleteProductAction(formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const id = text(formData, "id");
   const product = await removeProduct(id);
   if (product) await Promise.allSettled(product.images.map(removeImage));

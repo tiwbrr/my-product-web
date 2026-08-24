@@ -1,0 +1,58 @@
+"use client";
+
+import { useActionState } from "react";
+import { deleteMemberAction, updateMemberRoleAction, type MemberActionState } from "@/app/actions/members";
+import type { SafeUser } from "@/lib/types";
+
+const initialState: MemberActionState = { error: "" };
+
+function roleLabel(role: SafeUser["role"]) {
+  if (role === "admin") return "แอดมิน";
+  if (role === "manager") return "ผู้ดูแลร้าน";
+  return "สมาชิก";
+}
+
+function MemberActions({ user }: { user: SafeUser }) {
+  const [roleState, roleAction, rolePending] = useActionState(updateMemberRoleAction, initialState);
+  const [deleteState, deleteAction, deletePending] = useActionState(deleteMemberAction, initialState);
+
+  return <div className="member-admin-actions">
+    <form action={roleAction}>
+      <input type="hidden" name="id" value={user.id} />
+      <label>
+        <span className="sr-only">สิทธิ์ของ {user.name}</span>
+        <select name="role" defaultValue={user.role} aria-label={`สิทธิ์ของ ${user.name}`}>
+          <option value="user">สมาชิก</option>
+          <option value="manager">ผู้ดูแลร้าน</option>
+        </select>
+      </label>
+      <button type="submit" disabled={rolePending}>{rolePending ? "กำลังบันทึก..." : "บันทึกสิทธิ์"}</button>
+    </form>
+    <form action={deleteAction} onSubmit={(event) => {
+      if (!window.confirm(`ลบบัญชี ${user.name} (${user.email}) ใช่หรือไม่? ข้อมูลที่เกี่ยวข้องจะถูกลบด้วย`)) event.preventDefault();
+    }}>
+      <input type="hidden" name="id" value={user.id} />
+      <button className="member-delete-button" type="submit" disabled={deletePending}>{deletePending ? "กำลังลบ..." : "ลบบัญชี"}</button>
+    </form>
+    {roleState.error && <p className="form-error" role="alert">{roleState.error}</p>}
+    {roleState.success && <p className="form-success" role="status">{roleState.success}</p>}
+    {deleteState.error && <p className="form-error" role="alert">{deleteState.error}</p>}
+  </div>;
+}
+
+export function MemberManagement({ users, currentUserId }: { users: SafeUser[]; currentUserId: string }) {
+  return <div className="member-admin-list">
+    {users.map((user) => <article key={user.id}>
+      <div className="member-admin-avatar">{user.name.charAt(0).toUpperCase()}</div>
+      <div className="member-admin-identity">
+        <b>{user.name}{user.id === currentUserId && <small>บัญชีของคุณ</small>}</b>
+        <span>{user.email}</span>
+        <time dateTime={user.createdAt}>สมัครเมื่อ {new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(user.createdAt))}</time>
+      </div>
+      <span className={`member-role role-${user.role}`}>{roleLabel(user.role)}</span>
+      {user.role === "admin"
+        ? <small className="member-admin-locked">บัญชีแอดมินไม่สามารถแก้ไขหรือลบได้</small>
+        : <MemberActions user={user} />}
+    </article>)}
+  </div>;
+}

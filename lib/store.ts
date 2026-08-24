@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, ChatMessage, ContactChannel, GameCategory, Product, PushSubscriptionRecord, Session, StoreSettings, User } from "@/lib/types";
+import type { AccountGender, ChatMessage, ContactChannel, GameCategory, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -11,6 +11,8 @@ type UserRow = {
   role: User["role"];
   created_at: string;
 };
+
+type SafeUserRow = Omit<UserRow, "password_hash">;
 
 type SessionRow = {
   token_hash: string;
@@ -95,6 +97,10 @@ function toUser(row: UserRow): User {
   };
 }
 
+function toSafeUser(row: SafeUserRow): SafeUser {
+  return { id: row.id, name: row.name, email: row.email, role: row.role, createdAt: row.created_at };
+}
+
 function toSession(row: SessionRow): Session {
   return {
     tokenHash: row.token_hash,
@@ -174,6 +180,33 @@ export async function addUser(user: User): Promise<User> {
   if (error?.code === "23505") throw new Error("DUPLICATE_EMAIL", { cause: error });
   if (error) throw databaseError("addUser", error);
   return toUser(data as UserRow);
+}
+
+export async function getUsers() {
+  const { data, error } = await getSupabaseAdmin()
+    .from("store_users")
+    .select("id, name, email, role, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw databaseError("getUsers", error);
+  return (data as SafeUserRow[]).map(toSafeUser);
+}
+
+export async function updateUserRole(id: string, role: "user" | "manager"): Promise<void> {
+  const { error } = await getSupabaseAdmin()
+    .from("store_users")
+    .update({ role })
+    .eq("id", id)
+    .neq("role", "admin");
+  if (error) throw databaseError("updateUserRole", error);
+}
+
+export async function removeUser(id: string): Promise<void> {
+  const { error } = await getSupabaseAdmin()
+    .from("store_users")
+    .delete()
+    .eq("id", id)
+    .neq("role", "admin");
+  if (error) throw databaseError("removeUser", error);
 }
 
 export async function addSession(session: Session): Promise<void> {
@@ -257,6 +290,14 @@ export async function getMemberCount(): Promise<number> {
     .select("id", { count: "exact", head: true })
     .eq("role", "user");
   if (error) throw databaseError("getMemberCount", error);
+  return count ?? 0;
+}
+
+export async function getUserCount(): Promise<number> {
+  const { count, error } = await getSupabaseAdmin()
+    .from("store_users")
+    .select("id", { count: "exact", head: true });
+  if (error) throw databaseError("getUserCount", error);
   return count ?? 0;
 }
 

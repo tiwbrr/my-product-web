@@ -15,7 +15,7 @@ function scrypt(password: string, salt: string): Promise<Buffer> {
 export async function hashPassword(password: string) { const salt = randomBytes(16).toString("hex"); const key = await scrypt(password, salt); return `${salt}:${key.toString("hex")}`; }
 export async function verifyPassword(password: string, stored: string) { const [salt, value] = stored.split(":"); if (!salt || !value) return false; const expected = Buffer.from(value, "hex"); const actual = await scrypt(password, salt); return expected.length === actual.length && timingSafeEqual(expected, actual); }
 export function hashToken(token: string) { return createHash("sha256").update(token).digest("hex"); }
-function toSafeUser(user: User): SafeUser { const { passwordHash: _passwordHash, ...safe } = user; return safe; }
+function toSafeUser(user: User): SafeUser { return { id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt }; }
 
 export async function ensureAdmin() {
   const email = (process.env.ADMIN_EMAIL || "admin@mystore.local").toLowerCase();
@@ -55,5 +55,6 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
 }
 
 export async function requireUser() { const user = await getCurrentUser(); if (!user) redirect("/login"); return user; }
+export async function requireStaff() { const user = await getCurrentUser(); if (!user) redirect("/login?next=/admin"); if (user.role !== "admin" && user.role !== "manager") redirect("/account?error=forbidden"); return user; }
 export async function requireAdmin() { const user = await getCurrentUser(); if (!user) redirect("/login?next=/admin"); if (user.role !== "admin") redirect("/account?error=forbidden"); return user; }
 export async function getMemberCount() { return countMembers(); }
