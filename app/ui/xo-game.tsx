@@ -110,9 +110,87 @@ export function XOGame({ user }: { user: SafeUser }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const pollingRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const botSoundSnapshotRef = useRef(".........");
+  const roomSoundSnapshotRef = useRef<{ id: string; board: string; status: XOGameRoom["status"] } | null>(null);
   const botResult = useMemo(() => gameResult(botBoard), [botBoard]);
   const roomId = room?.id;
+  const onlineMyMark: Mark | null = room ? room.hostUserId === user.id ? "X" : "O" : null;
+
+  const unlockAudio = useCallback(() => {
+    if (!audioContextRef.current) audioContextRef.current = new AudioContext();
+    return audioContextRef.current.resume();
+  }, []);
+
+  const playGameSound = useCallback((kind: "x" | "o" | "win" | "lose" | "draw") => {
+    if (!soundEnabled) return;
+    void unlockAudio().then(() => {
+      const context = audioContextRef.current;
+      if (!context) return;
+      const patterns = {
+        x: [{ frequency: 440, offset: 0, duration: .11 }],
+        o: [{ frequency: 620, offset: 0, duration: .13 }],
+        win: [{ frequency: 523, offset: 0, duration: .16 }, { frequency: 659, offset: .14, duration: .16 }, { frequency: 784, offset: .28, duration: .28 }],
+        lose: [{ frequency: 520, offset: 0, duration: .18 }, { frequency: 410, offset: .16, duration: .18 }, { frequency: 300, offset: .32, duration: .3 }],
+        draw: [{ frequency: 440, offset: 0, duration: .16 }, { frequency: 440, offset: .2, duration: .2 }],
+      } as const;
+      const start = context.currentTime;
+      patterns[kind].forEach(({ frequency, offset, duration }) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = kind === "x" ? "triangle" : kind === "o" ? "sine" : "square";
+        oscillator.frequency.setValueAtTime(frequency, start + offset);
+        gain.gain.setValueAtTime(.0001, start + offset);
+        gain.gain.exponentialRampToValueAtTime(kind === "x" || kind === "o" ? .18 : .12, start + offset + .018);
+        gain.gain.exponentialRampToValueAtTime(.0001, start + offset + duration);
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start(start + offset);
+        oscillator.stop(start + offset + duration + .02);
+      });
+    }).catch(() => undefined);
+  }, [soundEnabled, unlockAudio]);
+
+  useEffect(() => {
+    const handleFirstInteraction = () => { void unlockAudio(); };
+    window.addEventListener("pointerdown", handleFirstInteraction, { once: true });
+    window.addEventListener("keydown", handleFirstInteraction, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", handleFirstInteraction);
+      window.removeEventListener("keydown", handleFirstInteraction);
+      void audioContextRef.current?.close();
+      audioContextRef.current = null;
+    };
+  }, [unlockAudio]);
+
+  useEffect(() => {
+    const nextSnapshot = botBoard.map((cell) => cell ?? ".").join("");
+    const previousSnapshot = botSoundSnapshotRef.current;
+    if (nextSnapshot === previousSnapshot) return;
+    botSoundSnapshotRef.current = nextSnapshot;
+    const addedIndex = [...nextSnapshot].findIndex((cell, index) => cell !== "." && previousSnapshot[index] === ".");
+    if (addedIndex < 0) return;
+    playGameSound(nextSnapshot[addedIndex] === "X" ? "x" : "o");
+    if (botResult) window.setTimeout(() => playGameSound(botResult.winner === "X" ? "win" : botResult.winner === "O" ? "lose" : "draw"), 170);
+  }, [botBoard, botResult, playGameSound]);
+
+  useEffect(() => {
+    if (!room) {
+      roomSoundSnapshotRef.current = null;
+      return;
+    }
+    const previous = roomSoundSnapshotRef.current;
+    roomSoundSnapshotRef.current = { id: room.id, board: room.board, status: room.status };
+    if (!previous || previous.id !== room.id || previous.board === room.board) return;
+    const addedIndex = [...room.board].findIndex((cell, index) => cell !== "." && previous.board[index] === ".");
+    if (addedIndex >= 0) playGameSound(room.board[addedIndex] === "X" ? "x" : "o");
+    if (previous.status === "playing" && room.status !== "playing") {
+      const playerWon = (room.status === "x_won" && onlineMyMark === "X") || (room.status === "o_won" && onlineMyMark === "O");
+      const outcome = room.status === "draw" ? "draw" : playerWon ? "win" : "lose";
+      window.setTimeout(() => playGameSound(outcome), 170);
+    }
+  }, [onlineMyMark, playGameSound, room]);
 
   useEffect(() => {
     if (mode !== "bot" || !botTurn || botResult) return;
@@ -210,13 +288,13 @@ export function XOGame({ user }: { user: SafeUser }) {
       <button type="button" onClick={() => setMode("bot")}><b>เล่นกับบอท</b><span>เริ่มเล่นได้ทันที คุณเป็น X และบอทเป็น O</span><i>เริ่มเกม →</i></button>
       <button type="button" onClick={() => setMode("online")}><b>เล่นออนไลน์</b><span>สร้างห้องหรือใส่รหัส 6 ตัวเพื่อเล่นกับสมาชิก</span><i>เปิดห้อง →</i></button>
     </div>
-    <Link href="/" className="xo-back-link">← กลับหน้าร้าน</Link>
+    <div className="xo-navigation-links"><Link href="/games/xo/leaderboard">🏆 ดูตารางอันดับ</Link><Link href="/">← กลับหน้าร้าน</Link></div>
   </section>;
 
   if (mode === "bot") {
     const botStatus = botResult?.winner === "X" ? "คุณชนะ!" : botResult?.winner === "O" ? "บอทชนะ" : botResult?.winner === "draw" ? "เสมอกัน" : botTurn ? "บอทกำลังคิด..." : "ตาของคุณ — เลือกช่องว่าง";
     return <section className="xo-shell xo-game-shell">
-      <div className="xo-game-heading"><button type="button" onClick={() => { resetBot(); setMode(null); }}>← เลือกโหมด</button><div><span>PLAYING WITH BOT</span><h1>X-O กับบอท</h1></div></div>
+      <div className="xo-game-heading"><div className="xo-heading-controls"><button type="button" onClick={() => { resetBot(); setMode(null); }}>← เลือกโหมด</button><Link href="/games/xo/leaderboard">🏆 อันดับ</Link><button className="xo-sound-toggle" type="button" aria-pressed={soundEnabled} onClick={() => setSoundEnabled((enabled) => !enabled)}>{soundEnabled ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด"}</button></div><div><span>PLAYING WITH BOT</span><h1>X-O กับบอท</h1></div></div>
       <div className="xo-match-card">
         {botResult?.winner === "X" && <Celebration />}
         <div className="xo-players"><div className="active"><i>X</i><span><b>{user.name}</b><small>คุณ</small></span></div><em>VS</em><div><i>O</i><span><b>KUOZO BOT</b><small>บอท</small></span></div></div>
@@ -229,7 +307,7 @@ export function XOGame({ user }: { user: SafeUser }) {
   }
 
   if (!room) return <section className="xo-shell xo-game-shell">
-    <div className="xo-game-heading"><button type="button" onClick={() => setMode(null)}>← เลือกโหมด</button><div><span>ONLINE MATCH</span><h1>เล่น X-O ออนไลน์</h1></div></div>
+    <div className="xo-game-heading"><div className="xo-heading-controls"><button type="button" onClick={() => setMode(null)}>← เลือกโหมด</button><Link href="/games/xo/leaderboard">🏆 อันดับ</Link><button className="xo-sound-toggle" type="button" aria-pressed={soundEnabled} onClick={() => setSoundEnabled((enabled) => !enabled)}>{soundEnabled ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด"}</button></div><div><span>ONLINE MATCH</span><h1>เล่น X-O ออนไลน์</h1></div></div>
     <div className="xo-online-lobby">
       <article><span>สร้างห้องใหม่</span><h2>ชวนเพื่อนมาเล่น</h2><p>ระบบจะสร้างรหัสห้อง 6 ตัว ส่งรหัสนี้ให้สมาชิกอีกคน</p><button className="xo-primary-button" type="button" disabled={busy} onClick={() => void postAction({ action: "create" })}>{busy ? "กำลังสร้าง..." : "สร้างห้อง"}</button></article>
       <article><span>เข้าร่วมห้อง</span><h2>มีรหัสห้องแล้ว</h2><p>กรอกรหัส 6 ตัวที่ได้รับจากผู้สร้างห้อง</p><form onSubmit={(event) => { event.preventDefault(); void postAction({ action: "join", code: joinCode }); }}><input value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))} maxLength={6} placeholder="ABC123" aria-label="รหัสห้อง" /><button className="xo-primary-button" disabled={busy || joinCode.length !== 6}>{busy ? "กำลังเข้า..." : "เข้าร่วมห้อง"}</button></form></article>
@@ -251,7 +329,7 @@ export function XOGame({ user }: { user: SafeUser }) {
         : myTurn ? "ตาของคุณ" : `รอ ${opponentName ?? "คู่แข่ง"} เดิน`;
 
   return <section className="xo-shell xo-game-shell">
-    <div className="xo-game-heading"><button type="button" onClick={() => void leaveRoom()}>← ออกจากห้อง</button><div><span>ROOM {room.code}</span><h1>การแข่งขันออนไลน์</h1></div></div>
+    <div className="xo-game-heading"><div className="xo-heading-controls"><button type="button" onClick={() => void leaveRoom()}>← ออกจากห้อง</button><Link href="/games/xo/leaderboard">🏆 อันดับ</Link><button className="xo-sound-toggle" type="button" aria-pressed={soundEnabled} onClick={() => setSoundEnabled((enabled) => !enabled)}>{soundEnabled ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด"}</button></div><div><span>ROOM {room.code}</span><h1>การแข่งขันออนไลน์</h1></div></div>
     <div className="xo-match-card">
       {winnerName && (room.status === "x_won" ? myMark === "X" : myMark === "O") && <Celebration />}
       <div className="xo-room-code"><span>รหัสห้อง</span><strong>{room.code}</strong><button type="button" onClick={() => void copyCode()}>{copied ? "คัดลอกแล้ว" : "คัดลอก"}</button></div>

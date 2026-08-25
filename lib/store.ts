@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User, XOGameRoom, YouTubeQueueItem } from "@/lib/types";
+import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User, XOGameRoom, XOPlayerStats, YouTubeQueueItem } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -97,6 +97,14 @@ type XOGameRoomRow = {
   updated_at: string;
   host: { name: string } | { name: string }[] | null;
   guest: { name: string } | { name: string }[] | null;
+};
+
+type XOPlayerStatsRow = {
+  user_id: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  store_users: { name: string } | { name: string }[] | null;
 };
 
 type YouTubeQueueRow = {
@@ -467,6 +475,28 @@ export async function leaveXOGameRoom(id: string, userId: string): Promise<void>
     .eq("id", id)
     .or(`host_user_id.eq.${userId},guest_user_id.eq.${userId}`);
   if (error) throw databaseError("leaveXOGameRoom", error);
+}
+
+export async function getXOLeaderboard(): Promise<XOPlayerStats[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("xo_player_stats")
+    .select("user_id, wins, losses, draws, store_users(name)")
+    .order("wins", { ascending: false })
+    .order("draws", { ascending: false })
+    .order("losses", { ascending: true })
+    .order("updated_at", { ascending: true })
+    .limit(100);
+  if (error) throw databaseError("getXOLeaderboard", error);
+  return (data as XOPlayerStatsRow[]).map((row) => {
+    const relatedUser = Array.isArray(row.store_users) ? row.store_users[0] : row.store_users;
+    return {
+      userId: row.user_id,
+      userName: relatedUser?.name ?? "สมาชิก",
+      wins: row.wins,
+      losses: row.losses,
+      draws: row.draws,
+    };
+  });
 }
 
 export async function getStoreSettings(): Promise<StoreSettings> {

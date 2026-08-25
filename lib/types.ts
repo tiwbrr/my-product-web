@@ -68,6 +68,14 @@ export type XOGameRoom = {
   updatedAt: string;
 };
 
+export type XOPlayerStats = {
+  userId: string;
+  userName: string;
+  wins: number;
+  losses: number;
+  draws: number;
+};
+
 export type YouTubeQueueItem = {
   id: string;
   videoId: string;
