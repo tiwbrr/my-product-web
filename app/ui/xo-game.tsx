@@ -47,17 +47,17 @@ function availableMoves(board: Cell[]) {
   return board.map((cell, index) => cell ? -1 : index).filter((index) => index >= 0);
 }
 
-function minimax(board: Cell[], maximizing: boolean, depth: number): number {
+function minimax(board: Cell[], maximizing: boolean, depth: number, botMark: Mark, humanMark: Mark): number {
   const result = gameResult(board, 3);
-  if (result?.winner === "O") return 10 - depth;
-  if (result?.winner === "X") return depth - 10;
+  if (result?.winner === botMark) return 10 - depth;
+  if (result?.winner === humanMark) return depth - 10;
   if (result?.winner === "draw") return 0;
 
   let bestScore = maximizing ? -Infinity : Infinity;
   for (const index of availableMoves(board)) {
     const next = [...board];
-    next[index] = maximizing ? "O" : "X";
-    const score = minimax(next, !maximizing, depth + 1);
+    next[index] = maximizing ? botMark : humanMark;
+    const score = minimax(next, !maximizing, depth + 1, botMark, humanMark);
     bestScore = maximizing ? Math.max(bestScore, score) : Math.min(bestScore, score);
   }
   return bestScore;
@@ -91,7 +91,7 @@ function positionScore(board: Cell[], index: number, mark: Mark, size: BoardSize
   return best + Math.max(0, size - Math.abs(row - center) - Math.abs(column - center));
 }
 
-function chooseBotMove(board: Cell[], difficulty: BotDifficulty, size: BoardSize) {
+function chooseBotMove(board: Cell[], difficulty: BotDifficulty, size: BoardSize, botMark: Mark, humanMark: Mark) {
   const available = availableMoves(board);
   if (difficulty === "easy") return available[Math.floor(Math.random() * available.length)];
 
@@ -100,18 +100,19 @@ function chooseBotMove(board: Cell[], difficulty: BotDifficulty, size: BoardSize
     next[index] = mark;
     return gameResult(next, size)?.winner === mark;
   });
-  const winningMove = completingMove("O");
+  const winningMove = completingMove(botMark);
   if (winningMove !== undefined) return winningMove;
-  const blockingMove = completingMove("X");
+  const blockingMove = completingMove(humanMark);
   if (blockingMove !== undefined) return blockingMove;
 
   if (difficulty === "hard" && size === 3) {
+    if (available.length === 9) return 0;
     let bestScore = -Infinity;
     let bestMove = available[0];
     for (const index of available) {
       const next = [...board];
-      next[index] = "O";
-      const score = minimax(next, false, 0);
+      next[index] = botMark;
+      const score = minimax(next, false, 0, botMark, humanMark);
       if (score > bestScore) {
         bestScore = score;
         bestMove = index;
@@ -122,8 +123,8 @@ function chooseBotMove(board: Cell[], difficulty: BotDifficulty, size: BoardSize
 
   if (difficulty === "hard") {
     return available.reduce((bestMove, index) => {
-      const score = positionScore(board, index, "O", size) + positionScore(board, index, "X", size) * .9;
-      const bestScore = positionScore(board, bestMove, "O", size) + positionScore(board, bestMove, "X", size) * .9;
+      const score = positionScore(board, index, botMark, size) + positionScore(board, index, humanMark, size) * .9;
+      const bestScore = positionScore(board, bestMove, botMark, size) + positionScore(board, bestMove, humanMark, size) * .9;
       return score > bestScore ? index : bestMove;
     }, available[0]);
   }
@@ -157,7 +158,7 @@ function Board({ board, size, disabled, winningLine, onMove }: { board: Cell[]; 
       aria-label={mark ? `ช่อง ${index + 1}: ${mark}` : `เลือกช่อง ${index + 1}`}
       onClick={() => onMove(index)}
       key={index}
-    >{mark}</button>)}
+    >{mark && <span>{mark}</span>}</button>)}
   </div>;
 }
 
@@ -165,6 +166,7 @@ export function XOGame({ user }: { user: SafeUser }) {
   const [mode, setMode] = useState<Mode>(null);
   const [botBoard, setBotBoard] = useState<Cell[]>(Array(9).fill(null));
   const [botBoardSize, setBotBoardSize] = useState<BoardSize>(3);
+  const [botRound, setBotRound] = useState(1);
   const [botTurn, setBotTurn] = useState(false);
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>("medium");
   const [onlineBoardSize, setOnlineBoardSize] = useState<BoardSize>(3);
@@ -179,6 +181,8 @@ export function XOGame({ user }: { user: SafeUser }) {
   const botSoundSnapshotRef = useRef(".........");
   const roomSoundSnapshotRef = useRef<{ id: string; board: string; status: XOGameRoom["status"] } | null>(null);
   const botResult = useMemo(() => gameResult(botBoard, botBoardSize), [botBoard, botBoardSize]);
+  const humanMark: Mark = botRound % 2 === 1 ? "X" : "O";
+  const botMark = oppositeMark(humanMark);
   const roomId = room?.id;
   const onlineMyMark: Mark | null = room
     ? room.hostUserId === user.id ? room.hostMark : oppositeMark(room.hostMark)
@@ -237,8 +241,8 @@ export function XOGame({ user }: { user: SafeUser }) {
     const addedIndex = [...nextSnapshot].findIndex((cell, index) => cell !== "." && previousSnapshot[index] === ".");
     if (addedIndex < 0) return;
     playGameSound(nextSnapshot[addedIndex] === "X" ? "x" : "o");
-    if (botResult) window.setTimeout(() => playGameSound(botResult.winner === "X" ? "win" : botResult.winner === "O" ? "lose" : "draw"), 170);
-  }, [botBoard, botResult, playGameSound]);
+    if (botResult) window.setTimeout(() => playGameSound(botResult.winner === "draw" ? "draw" : botResult.winner === humanMark ? "win" : "lose"), 170);
+  }, [botBoard, botResult, humanMark, playGameSound]);
 
   useEffect(() => {
     if (!room) {
@@ -261,16 +265,16 @@ export function XOGame({ user }: { user: SafeUser }) {
     if (mode !== "bot" || !botTurn || botResult) return;
     const timer = window.setTimeout(() => {
       setBotBoard((current) => {
-        const move = chooseBotMove(current, botDifficulty, botBoardSize);
+        const move = chooseBotMove(current, botDifficulty, botBoardSize, botMark, humanMark);
         if (move === undefined) return current;
         const next = [...current];
-        next[move] = "O";
+        next[move] = botMark;
         return next;
       });
       setBotTurn(false);
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [botBoardSize, botDifficulty, botResult, botTurn, mode]);
+  }, [botBoardSize, botDifficulty, botMark, botResult, botTurn, humanMark, mode]);
 
   const refreshRoom = useCallback(async () => {
     if (!roomId || pollingRef.current) return;
@@ -320,19 +324,28 @@ export function XOGame({ user }: { user: SafeUser }) {
   const playBotMove = (cell: number) => {
     if (botTurn || botResult || botBoard[cell]) return;
     const next = [...botBoard];
-    next[cell] = "X";
+    next[cell] = humanMark;
     setBotBoard(next);
     if (!gameResult(next, botBoardSize)) setBotTurn(true);
   };
 
-  const resetBot = (size = botBoardSize) => {
+  const resetBot = (size = botBoardSize, advanceRound = false) => {
+    const nextRound = advanceRound ? botRound + 1 : botRound;
+    setBotRound(nextRound);
     setBotBoard(Array(size * size).fill(null));
-    setBotTurn(false);
+    setBotTurn(nextRound % 2 === 0);
   };
 
   const changeBotBoardSize = (size: BoardSize) => {
     setBotBoardSize(size);
     resetBot(size);
+  };
+
+  const leaveBotMode = () => {
+    setBotRound(1);
+    setBotBoard(Array(botBoardSize * botBoardSize).fill(null));
+    setBotTurn(false);
+    setMode(null);
   };
 
   const leaveRoom = async () => {
@@ -362,17 +375,17 @@ export function XOGame({ user }: { user: SafeUser }) {
   </section>;
 
   if (mode === "bot") {
-    const botStatus = botResult?.winner === "X" ? "คุณชนะ!" : botResult?.winner === "O" ? "บอทชนะ" : botResult?.winner === "draw" ? "เสมอกัน" : botTurn ? "บอทกำลังคิด..." : "ตาของคุณ — เลือกช่องว่าง";
+    const botStatus = botResult?.winner === humanMark ? "คุณชนะ!" : botResult?.winner === botMark ? "บอทชนะ" : botResult?.winner === "draw" ? "เสมอกัน" : botTurn ? "บอทกำลังคิด..." : "ตาของคุณ — เลือกช่องว่าง";
     return <section className="xo-shell xo-game-shell">
-      <div className="xo-game-heading"><div className="xo-heading-controls"><button type="button" onClick={() => { resetBot(); setMode(null); }}>← เลือกโหมด</button><Link href="/games/xo/leaderboard">🏆 อันดับ</Link><button className="xo-sound-toggle" type="button" aria-pressed={soundEnabled} onClick={() => setSoundEnabled((enabled) => !enabled)}>{soundEnabled ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด"}</button></div><div><span>PLAYING WITH BOT</span><h1>X-O กับบอท</h1></div></div>
+      <div className="xo-game-heading"><div className="xo-heading-controls"><button type="button" onClick={leaveBotMode}>← เลือกโหมด</button><Link href="/games/xo/leaderboard">🏆 อันดับ</Link><button className="xo-sound-toggle" type="button" aria-pressed={soundEnabled} onClick={() => setSoundEnabled((enabled) => !enabled)}>{soundEnabled ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด"}</button></div><div><span>PLAYING WITH BOT · ROUND {botRound}</span><h1>X-O กับบอท</h1></div></div>
       <div className="xo-match-card">
-        {botResult?.winner === "X" && <Celebration />}
-        <div className="xo-players"><div className="active"><i className="mark-x">X</i><span><b>{user.name}</b><small>คุณ</small></span></div><em>VS</em><div><i className="mark-o">O</i><span><b>KUOZO BOT</b><small>บอท</small></span></div></div>
+        {botResult?.winner === humanMark && <Celebration />}
+        <div className="xo-players"><div className={!botTurn && !botResult ? "active" : ""}><i className={`mark-${humanMark.toLowerCase()}`}>{humanMark}</i><span><b>{user.name}</b><small>คุณ{humanMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div><em>VS</em><div className={botTurn && !botResult ? "active" : ""}><i className={`mark-${botMark.toLowerCase()}`}>{botMark}</i><span><b>KUOZO BOT</b><small>บอท{botMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div></div>
         <div className="xo-board-size-picker" aria-label="เลือกขนาดกระดาน"><span>ขนาดกระดาน</span>{([3, 5, 10] as const).map((size) => <button type="button" className={botBoardSize === size ? "active" : ""} aria-pressed={botBoardSize === size} onClick={() => changeBotBoardSize(size)} key={size}>{size}×{size}<small>เรียง {winLength(size)}</small></button>)}</div>
         <div className="xo-difficulty" aria-label="เลือกระดับความยาก"><span>ระดับบอท</span>{(["easy", "medium", "hard"] as const).map((difficulty) => <button type="button" className={botDifficulty === difficulty ? "active" : ""} aria-pressed={botDifficulty === difficulty} onClick={() => { setBotDifficulty(difficulty); resetBot(); }} key={difficulty}>{difficulty === "easy" ? "ง่าย" : difficulty === "medium" ? "กลาง" : "ยาก"}</button>)}</div>
         <p className={`xo-status ${botResult ? "finished" : ""}`}>{botStatus}</p>
         <Board board={botBoard} size={botBoardSize} disabled={botTurn || Boolean(botResult)} winningLine={botResult?.line} onMove={playBotMove} />
-        {botResult && <button className="xo-primary-button" type="button" onClick={() => resetBot()}>เล่นใหม่</button>}
+        {botResult && <button className="xo-primary-button" type="button" onClick={() => resetBot(botBoardSize, true)}>เล่นรอบถัดไปและสลับคนเริ่ม</button>}
       </div>
     </section>;
   }
