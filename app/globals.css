@@ -391,6 +391,8 @@ button[aria-busy="true"] { cursor:wait;opacity:.72; }
 /* X-O mini game */
 .xo-promo { max-width:1120px;margin:0 auto 80px;padding:34px 38px;display:flex;align-items:center;justify-content:space-between;gap:24px;border:1px solid #49375e;border-radius:12px;background:radial-gradient(circle at 15% 50%,#392250,#17121f 58%);color:#eee8f5;box-shadow:0 20px 55px #0006; }.xo-promo span { color:#c29dff;font-size:9px;font-weight:800;letter-spacing:.18em; }.xo-promo h2 { margin:7px 0 5px;font-size:27px; }.xo-promo p { margin:0;color:#aaa1b2;font-size:11px; }.xo-promo>a { flex:0 0 auto;padding:13px 18px;border-radius:7px;background:#8a58da;color:#fff;font-size:11px;font-weight:800; }
 .xo-page { position:relative;min-height:100vh;overflow-x:hidden;background:radial-gradient(circle at 50% 15%,#2b1742 0,#120f18 38%,#08070a 75%);color:#eee8f5;isolation:isolate; }
+.games-layout { --store-panel:#111116;--store-panel-raised:#18181f;--store-border:#2a2933;--store-text:#f4f1f8;--store-muted:#aaa3b4;min-height:100vh;overflow:hidden;background:#08070a; }
+.games-layout>.community-chat { margin-top:80px; }
 .xo-page>.game-header { position:relative;z-index:5; }
 .xo-arcade-background { position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none; }
 .xo-arcade-background::before { content:"";position:absolute;left:-35%;right:-35%;bottom:-42%;height:90%;background-image:linear-gradient(#9b63e733 1px,transparent 1px),linear-gradient(90deg,#9b63e733 1px,transparent 1px);background-size:52px 52px;transform:perspective(420px) rotateX(58deg);transform-origin:center bottom;mask-image:linear-gradient(to top,#000 30%,transparent 88%);animation:xo-grid-travel 8s linear infinite; }
