@@ -144,6 +144,14 @@ function Celebration() {
   </div>;
 }
 
+function LiveScore({ leftName, leftWins, leftLosses, rightName, rightWins, rightLosses, draws }: { leftName: string; leftWins: number; leftLosses: number; rightName: string; rightWins: number; rightLosses: number; draws: number }) {
+  return <div className="xo-live-score" aria-label="คะแนนการแข่งขันขณะนี้">
+    <article><b>{leftName}</b><div><span>ชนะ <strong>{leftWins}</strong></span><span>แพ้ <strong>{leftLosses}</strong></span></div></article>
+    <div><span>เสมอ</span><strong>{draws}</strong></div>
+    <article><b>{rightName}</b><div><span>ชนะ <strong>{rightWins}</strong></span><span>แพ้ <strong>{rightLosses}</strong></span></div></article>
+  </div>;
+}
+
 function roomBoard(board: string): Cell[] {
   return board.split("").map((cell) => cell === "X" || cell === "O" ? cell : null);
 }
@@ -167,6 +175,7 @@ export function XOGame({ user }: { user: SafeUser }) {
   const [botBoard, setBotBoard] = useState<Cell[]>(Array(9).fill(null));
   const [botBoardSize, setBotBoardSize] = useState<BoardSize>(3);
   const [botRound, setBotRound] = useState(1);
+  const [botScore, setBotScore] = useState({ humanWins: 0, botWins: 0, draws: 0 });
   const [botTurn, setBotTurn] = useState(false);
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>("medium");
   const [onlineBoardSize, setOnlineBoardSize] = useState<BoardSize>(3);
@@ -221,6 +230,14 @@ export function XOGame({ user }: { user: SafeUser }) {
     }).catch(() => undefined);
   }, [soundEnabled, unlockAudio]);
 
+  const recordBotOutcome = useCallback((winner: Mark | "draw") => {
+    setBotScore((current) => winner === "draw"
+      ? { ...current, draws: current.draws + 1 }
+      : winner === humanMark
+        ? { ...current, humanWins: current.humanWins + 1 }
+        : { ...current, botWins: current.botWins + 1 });
+  }, [humanMark]);
+
   useEffect(() => {
     const handleFirstInteraction = () => { void unlockAudio(); };
     window.addEventListener("pointerdown", handleFirstInteraction, { once: true });
@@ -241,7 +258,9 @@ export function XOGame({ user }: { user: SafeUser }) {
     const addedIndex = [...nextSnapshot].findIndex((cell, index) => cell !== "." && previousSnapshot[index] === ".");
     if (addedIndex < 0) return;
     playGameSound(nextSnapshot[addedIndex] === "X" ? "x" : "o");
-    if (botResult) window.setTimeout(() => playGameSound(botResult.winner === "draw" ? "draw" : botResult.winner === humanMark ? "win" : "lose"), 170);
+    if (botResult) {
+      window.setTimeout(() => playGameSound(botResult.winner === "draw" ? "draw" : botResult.winner === humanMark ? "win" : "lose"), 170);
+    }
   }, [botBoard, botResult, humanMark, playGameSound]);
 
   useEffect(() => {
@@ -264,17 +283,17 @@ export function XOGame({ user }: { user: SafeUser }) {
   useEffect(() => {
     if (mode !== "bot" || !botTurn || botResult) return;
     const timer = window.setTimeout(() => {
-      setBotBoard((current) => {
-        const move = chooseBotMove(current, botDifficulty, botBoardSize, botMark, humanMark);
-        if (move === undefined) return current;
-        const next = [...current];
-        next[move] = botMark;
-        return next;
-      });
+      const move = chooseBotMove(botBoard, botDifficulty, botBoardSize, botMark, humanMark);
+      if (move === undefined) return;
+      const next = [...botBoard];
+      next[move] = botMark;
+      const result = gameResult(next, botBoardSize);
+      setBotBoard(next);
+      if (result) recordBotOutcome(result.winner);
       setBotTurn(false);
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [botBoardSize, botDifficulty, botMark, botResult, botTurn, humanMark, mode]);
+  }, [botBoard, botBoardSize, botDifficulty, botMark, botResult, botTurn, humanMark, mode, recordBotOutcome]);
 
   const refreshRoom = useCallback(async () => {
     if (!roomId || pollingRef.current) return;
@@ -325,8 +344,10 @@ export function XOGame({ user }: { user: SafeUser }) {
     if (botTurn || botResult || botBoard[cell]) return;
     const next = [...botBoard];
     next[cell] = humanMark;
+    const result = gameResult(next, botBoardSize);
     setBotBoard(next);
-    if (!gameResult(next, botBoardSize)) setBotTurn(true);
+    if (result) recordBotOutcome(result.winner);
+    else setBotTurn(true);
   };
 
   const resetBot = (size = botBoardSize, advanceRound = false) => {
@@ -343,6 +364,7 @@ export function XOGame({ user }: { user: SafeUser }) {
 
   const leaveBotMode = () => {
     setBotRound(1);
+    setBotScore({ humanWins: 0, botWins: 0, draws: 0 });
     setBotBoard(Array(botBoardSize * botBoardSize).fill(null));
     setBotTurn(false);
     setMode(null);
@@ -381,6 +403,7 @@ export function XOGame({ user }: { user: SafeUser }) {
       <div className="xo-match-card">
         {botResult?.winner === humanMark && <Celebration />}
         <div className="xo-players"><div className={!botTurn && !botResult ? "active" : ""}><i className={`mark-${humanMark.toLowerCase()}`}>{humanMark}</i><span><b>{user.name}</b><small>คุณ{humanMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div><em>VS</em><div className={botTurn && !botResult ? "active" : ""}><i className={`mark-${botMark.toLowerCase()}`}>{botMark}</i><span><b>KUOZO BOT</b><small>บอท{botMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div></div>
+        <LiveScore leftName={user.name} leftWins={botScore.humanWins} leftLosses={botScore.botWins} rightName="KUOZO BOT" rightWins={botScore.botWins} rightLosses={botScore.humanWins} draws={botScore.draws} />
         <div className="xo-board-size-picker" aria-label="เลือกขนาดกระดาน"><span>ขนาดกระดาน</span>{([3, 5, 10] as const).map((size) => <button type="button" className={botBoardSize === size ? "active" : ""} aria-pressed={botBoardSize === size} onClick={() => changeBotBoardSize(size)} key={size}>{size}×{size}<small>เรียง {winLength(size)}</small></button>)}</div>
         <div className="xo-difficulty" aria-label="เลือกระดับความยาก"><span>ระดับบอท</span>{(["easy", "medium", "hard"] as const).map((difficulty) => <button type="button" className={botDifficulty === difficulty ? "active" : ""} aria-pressed={botDifficulty === difficulty} onClick={() => { setBotDifficulty(difficulty); resetBot(); }} key={difficulty}>{difficulty === "easy" ? "ง่าย" : difficulty === "medium" ? "กลาง" : "ยาก"}</button>)}</div>
         <p className={`xo-status ${botResult ? "finished" : ""}`}>{botStatus}</p>
@@ -422,6 +445,7 @@ export function XOGame({ user }: { user: SafeUser }) {
       {winnerName && (room.status === "x_won" ? myMark === "X" : myMark === "O") && <Celebration />}
       <div className="xo-room-code"><span>รหัสห้อง</span><strong>{room.code}</strong><small>รอบที่ {room.roundNumber} · {room.boardSize}×{room.boardSize} · เรียง {winLength(room.boardSize)} ชนะ</small><button type="button" onClick={() => void copyCode()}>{copied ? "คัดลอกแล้ว" : "คัดลอก"}</button></div>
       <div className="xo-players"><div className={room.turn === room.hostMark && room.status === "playing" ? "active" : ""}><i className={`mark-${room.hostMark.toLowerCase()}`}>{room.hostMark}</i><span><b>{room.hostName}</b><small>ผู้สร้างห้อง{room.hostMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div><em>VS</em><div className={room.turn === guestMark && room.status === "playing" ? "active" : ""}><i className={`mark-${guestMark.toLowerCase()}`}>{guestMark}</i><span><b>{room.guestName ?? "กำลังรอ..."}</b><small>ผู้เข้าร่วม{guestMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div></div>
+      <LiveScore leftName={room.hostName} leftWins={room.hostWins} leftLosses={room.guestWins} rightName={room.guestName ?? "ผู้เข้าร่วม"} rightWins={room.guestWins} rightLosses={room.hostWins} draws={room.roomDraws} />
       <p className={`xo-status ${room.status !== "playing" && room.status !== "waiting" ? "finished" : ""}`}>{onlineStatus}</p>
       <Board board={board} size={room.boardSize} disabled={busy || !myTurn} winningLine={onlineResult?.line} onMove={(cell) => void postAction({ action: "move", roomId: room.id, cell })} />
       {room.status === "waiting" && <p className="xo-room-hint">ส่งรหัส <b>{room.code}</b> ให้สมาชิกอีกคน แล้วรอหน้านี้อัปเดตอัตโนมัติ</p>}

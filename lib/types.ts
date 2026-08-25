@@ -61,6 +61,9 @@ export type XOGameRoom = {
   hostMark: "X" | "O";
   boardSize: 3 | 5 | 10;
   roundNumber: number;
+  hostWins: number;
+  guestWins: number;
+  roomDraws: number;
   guestUserId: string | null;
   guestName: string | null;
   board: string;

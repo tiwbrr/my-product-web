@@ -91,6 +91,9 @@ type XOGameRoomRow = {
   host_mark: "X" | "O";
   board_size: 3 | 5 | 10;
   round_number: number;
+  host_wins: number;
+  guest_wins: number;
+  room_draws: number;
   guest_user_id: string | null;
   board: string;
   turn: "X" | "O";
@@ -402,7 +405,7 @@ export async function completeYouTubeQueueItem(id: string): Promise<boolean> {
   return data === true;
 }
 
-const xoRoomSelect = "id, code, host_user_id, host_mark, board_size, round_number, guest_user_id, board, turn, status, rematch_host, rematch_guest, updated_at, host:store_users!xo_rooms_host_user_id_fkey(name), guest:store_users!xo_rooms_guest_user_id_fkey(name)";
+const xoRoomSelect = "id, code, host_user_id, host_mark, board_size, round_number, host_wins, guest_wins, room_draws, guest_user_id, board, turn, status, rematch_host, rematch_guest, updated_at, host:store_users!xo_rooms_host_user_id_fkey(name), guest:store_users!xo_rooms_guest_user_id_fkey(name)";
 
 function toXOGameRoom(row: XOGameRoomRow): XOGameRoom {
   const host = Array.isArray(row.host) ? row.host[0] : row.host;
@@ -415,6 +418,9 @@ function toXOGameRoom(row: XOGameRoomRow): XOGameRoom {
     hostMark: row.host_mark,
     boardSize: row.board_size,
     roundNumber: row.round_number,
+    hostWins: row.host_wins,
+    guestWins: row.guest_wins,
+    roomDraws: row.room_draws,
     guestUserId: row.guest_user_id,
     guestName: guest?.name ?? null,
     board: row.board,
