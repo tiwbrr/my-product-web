@@ -7,6 +7,7 @@ import type { SafeUser, XOGameRoom } from "@/lib/types";
 type Mark = "X" | "O";
 type Cell = Mark | null;
 type Mode = "bot" | "online" | null;
+type BotDifficulty = "easy" | "medium" | "hard";
 
 const winningLines = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -22,8 +23,44 @@ function gameResult(board: Cell[]) {
   return board.every(Boolean) ? { winner: "draw" as const, line: null } : null;
 }
 
-function chooseBotMove(board: Cell[]) {
-  const available = board.map((cell, index) => cell ? -1 : index).filter((index) => index >= 0);
+function availableMoves(board: Cell[]) {
+  return board.map((cell, index) => cell ? -1 : index).filter((index) => index >= 0);
+}
+
+function minimax(board: Cell[], maximizing: boolean, depth: number): number {
+  const result = gameResult(board);
+  if (result?.winner === "O") return 10 - depth;
+  if (result?.winner === "X") return depth - 10;
+  if (result?.winner === "draw") return 0;
+
+  let bestScore = maximizing ? -Infinity : Infinity;
+  for (const index of availableMoves(board)) {
+    const next = [...board];
+    next[index] = maximizing ? "O" : "X";
+    const score = minimax(next, !maximizing, depth + 1);
+    bestScore = maximizing ? Math.max(bestScore, score) : Math.min(bestScore, score);
+  }
+  return bestScore;
+}
+
+function chooseBotMove(board: Cell[], difficulty: BotDifficulty) {
+  const available = availableMoves(board);
+  if (difficulty === "easy") return available[Math.floor(Math.random() * available.length)];
+  if (difficulty === "hard") {
+    let bestScore = -Infinity;
+    let bestMove = available[0];
+    for (const index of available) {
+      const next = [...board];
+      next[index] = "O";
+      const score = minimax(next, false, 0);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = index;
+      }
+    }
+    return bestMove;
+  }
+
   const completingMove = (mark: Mark) => available.find((index) => {
     const next = [...board];
     next[index] = mark;
@@ -37,6 +74,12 @@ function chooseBotMove(board: Cell[]) {
   const corners = available.filter((index) => [0, 2, 6, 8].includes(index));
   const choices = corners.length ? corners : available;
   return choices[Math.floor(Math.random() * choices.length)];
+}
+
+function Celebration() {
+  return <div className="xo-confetti" aria-hidden="true">
+    {Array.from({ length: 24 }, (_, index) => <i key={index} style={{ left: `${4 + (index * 17) % 92}%`, animationDelay: `${(index % 8) * -0.18}s`, animationDuration: `${1.9 + (index % 5) * 0.22}s` }} />)}
+  </div>;
 }
 
 function roomBoard(board: string): Cell[] {
@@ -61,6 +104,7 @@ export function XOGame({ user }: { user: SafeUser }) {
   const [mode, setMode] = useState<Mode>(null);
   const [botBoard, setBotBoard] = useState<Cell[]>(Array(9).fill(null));
   const [botTurn, setBotTurn] = useState(false);
+  const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>("medium");
   const [room, setRoom] = useState<XOGameRoom | null>(null);
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -74,7 +118,7 @@ export function XOGame({ user }: { user: SafeUser }) {
     if (mode !== "bot" || !botTurn || botResult) return;
     const timer = window.setTimeout(() => {
       setBotBoard((current) => {
-        const move = chooseBotMove(current);
+        const move = chooseBotMove(current, botDifficulty);
         if (move === undefined) return current;
         const next = [...current];
         next[move] = "O";
@@ -83,7 +127,7 @@ export function XOGame({ user }: { user: SafeUser }) {
       setBotTurn(false);
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [botResult, botTurn, mode]);
+  }, [botDifficulty, botResult, botTurn, mode]);
 
   const refreshRoom = useCallback(async () => {
     if (!roomId || pollingRef.current) return;
@@ -174,7 +218,9 @@ export function XOGame({ user }: { user: SafeUser }) {
     return <section className="xo-shell xo-game-shell">
       <div className="xo-game-heading"><button type="button" onClick={() => { resetBot(); setMode(null); }}>← เลือกโหมด</button><div><span>PLAYING WITH BOT</span><h1>X-O กับบอท</h1></div></div>
       <div className="xo-match-card">
+        {botResult?.winner === "X" && <Celebration />}
         <div className="xo-players"><div className="active"><i>X</i><span><b>{user.name}</b><small>คุณ</small></span></div><em>VS</em><div><i>O</i><span><b>KUOZO BOT</b><small>บอท</small></span></div></div>
+        <div className="xo-difficulty" aria-label="เลือกระดับความยาก"><span>ระดับบอท</span>{(["easy", "medium", "hard"] as const).map((difficulty) => <button type="button" className={botDifficulty === difficulty ? "active" : ""} aria-pressed={botDifficulty === difficulty} onClick={() => { setBotDifficulty(difficulty); resetBot(); }} key={difficulty}>{difficulty === "easy" ? "ง่าย" : difficulty === "medium" ? "กลาง" : "ยาก"}</button>)}</div>
         <p className={`xo-status ${botResult ? "finished" : ""}`}>{botStatus}</p>
         <Board board={botBoard} disabled={botTurn || Boolean(botResult)} winningLine={botResult?.line} onMove={playBotMove} />
         {botResult && <button className="xo-primary-button" type="button" onClick={resetBot}>เล่นใหม่</button>}
@@ -207,6 +253,7 @@ export function XOGame({ user }: { user: SafeUser }) {
   return <section className="xo-shell xo-game-shell">
     <div className="xo-game-heading"><button type="button" onClick={() => void leaveRoom()}>← ออกจากห้อง</button><div><span>ROOM {room.code}</span><h1>การแข่งขันออนไลน์</h1></div></div>
     <div className="xo-match-card">
+      {winnerName && (room.status === "x_won" ? myMark === "X" : myMark === "O") && <Celebration />}
       <div className="xo-room-code"><span>รหัสห้อง</span><strong>{room.code}</strong><button type="button" onClick={() => void copyCode()}>{copied ? "คัดลอกแล้ว" : "คัดลอก"}</button></div>
       <div className="xo-players"><div className={room.turn === "X" && room.status === "playing" ? "active" : ""}><i>X</i><span><b>{room.hostName}</b><small>ผู้สร้างห้อง</small></span></div><em>VS</em><div className={room.turn === "O" && room.status === "playing" ? "active" : ""}><i>O</i><span><b>{room.guestName ?? "กำลังรอ..."}</b><small>ผู้เข้าร่วม</small></span></div></div>
       <p className={`xo-status ${room.status !== "playing" && room.status !== "waiting" ? "finished" : ""}`}>{onlineStatus}</p>

@@ -13,6 +13,7 @@ export default async function XOGamePage() {
   if (!settings.xoGameEnabled) redirect("/");
 
   return <main className="xo-page">
+    <div className="xo-arcade-background" aria-hidden="true"><i>X</i><i>O</i><i>X</i><i>O</i><i>X</i><i>O</i></div>
     <StoreHeader user={user} />
     <XOGame user={user} />
   </main>;
