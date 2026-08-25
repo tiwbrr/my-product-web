@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 const adminSections = [
   { id: "overview", icon: "⌂", label: "ภาพรวม" },
   { id: "members", icon: "♙", label: "จัดการสมาชิก", adminOnly: true },
+  { id: "mini-game", icon: "XO", label: "มินิเกม X-O" },
   { id: "contacts", icon: "◎", label: "ติดต่อ Playlist และเสียง" },
   { id: "categories", icon: "●", label: "หมวดเกม" },
   { id: "add-product", icon: "＋", label: "เพิ่มสินค้า" },

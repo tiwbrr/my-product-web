@@ -60,6 +60,24 @@ export async function saveYouTubeQueueVisibilityAction(
   }
 }
 
+export async function saveXOGameVisibilityAction(
+  _state: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  await requireStaff();
+  const current = await getStoreSettings();
+  const xoGameEnabled = formData.get("enabled") === "on";
+  try {
+    await saveStoreSettings({ ...current, xoGameEnabled, updatedAt: new Date().toISOString() });
+    revalidatePath("/");
+    revalidatePath("/games/xo");
+    revalidatePath("/admin");
+    return { error: "", success: xoGameEnabled ? "เปิดระบบมินิเกม X-O แล้ว" : "ปิดและซ่อนระบบมินิเกม X-O แล้ว" };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "บันทึกสถานะมินิเกมไม่สำเร็จ" };
+  }
+}
+
 export async function saveNotificationSoundAction(
   _state: SettingsState,
   formData: FormData,

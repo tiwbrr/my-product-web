@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User, YouTubeQueueItem } from "@/lib/types";
+import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User, XOGameRoom, YouTubeQueueItem } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -44,6 +44,7 @@ type StoreSettingsRow = {
   facebook_url: string;
   youtube_playlist_url: string;
   youtube_queue_enabled?: boolean | null;
+  xo_game_enabled?: boolean | null;
   notification_sound_url?: string | null;
   updated_at: string;
 };
@@ -81,6 +82,21 @@ type GameCategoryRow = {
   name: string;
   icon: string;
   sort_order: number;
+};
+
+type XOGameRoomRow = {
+  id: string;
+  code: string;
+  host_user_id: string;
+  guest_user_id: string | null;
+  board: string;
+  turn: "X" | "O";
+  status: XOGameRoom["status"];
+  rematch_host: boolean;
+  rematch_guest: boolean;
+  updated_at: string;
+  host: { name: string } | { name: string }[] | null;
+  guest: { name: string } | { name: string }[] | null;
 };
 
 type YouTubeQueueRow = {
@@ -375,6 +391,84 @@ export async function completeYouTubeQueueItem(id: string): Promise<boolean> {
   return data === true;
 }
 
+const xoRoomSelect = "id, code, host_user_id, guest_user_id, board, turn, status, rematch_host, rematch_guest, updated_at, host:store_users!xo_rooms_host_user_id_fkey(name), guest:store_users!xo_rooms_guest_user_id_fkey(name)";
+
+function toXOGameRoom(row: XOGameRoomRow): XOGameRoom {
+  const host = Array.isArray(row.host) ? row.host[0] : row.host;
+  const guest = Array.isArray(row.guest) ? row.guest[0] : row.guest;
+  return {
+    id: row.id,
+    code: row.code,
+    hostUserId: row.host_user_id,
+    hostName: host?.name ?? "สมาชิก",
+    guestUserId: row.guest_user_id,
+    guestName: guest?.name ?? null,
+    board: row.board,
+    turn: row.turn,
+    status: row.status,
+    rematchHost: row.rematch_host,
+    rematchGuest: row.rematch_guest,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function createXOGameRoom(id: string, code: string, userId: string): Promise<XOGameRoom> {
+  await getSupabaseAdmin().from("xo_rooms").delete().lt("expires_at", new Date().toISOString());
+  const { data, error } = await getSupabaseAdmin()
+    .from("xo_rooms")
+    .insert({ id, code, host_user_id: userId })
+    .select(xoRoomSelect)
+    .single();
+  if (error) throw databaseError("createXOGameRoom", error);
+  return toXOGameRoom(data as unknown as XOGameRoomRow);
+}
+
+export async function getXOGameRoom(id: string): Promise<XOGameRoom | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("xo_rooms")
+    .select(xoRoomSelect)
+    .eq("id", id)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (error) throw databaseError("getXOGameRoom", error);
+  return data ? toXOGameRoom(data as unknown as XOGameRoomRow) : null;
+}
+
+export async function getXOGameRoomByCode(code: string): Promise<XOGameRoom | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("xo_rooms")
+    .select(xoRoomSelect)
+    .eq("code", code)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (error) throw databaseError("getXOGameRoomByCode", error);
+  return data ? toXOGameRoom(data as unknown as XOGameRoomRow) : null;
+}
+
+export async function joinXOGameRoom(id: string, userId: string): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("join_xo_room", { p_room_id: id, p_user_id: userId });
+  if (error) throw databaseError("joinXOGameRoom", error);
+}
+
+export async function playXOMove(id: string, userId: string, cell: number): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("play_xo_move", { p_room_id: id, p_user_id: userId, p_cell: cell });
+  if (error) throw databaseError("playXOMove", error);
+}
+
+export async function requestXORematch(id: string, userId: string): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("request_xo_rematch", { p_room_id: id, p_user_id: userId });
+  if (error) throw databaseError("requestXORematch", error);
+}
+
+export async function leaveXOGameRoom(id: string, userId: string): Promise<void> {
+  const { error } = await getSupabaseAdmin()
+    .from("xo_rooms")
+    .delete()
+    .eq("id", id)
+    .or(`host_user_id.eq.${userId},guest_user_id.eq.${userId}`);
+  if (error) throw databaseError("leaveXOGameRoom", error);
+}
+
 export async function getStoreSettings(): Promise<StoreSettings> {
   const [{ data, error }, contactChannels] = await Promise.all([
     getSupabaseAdmin()
@@ -385,21 +479,21 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     getContactChannels(),
   ]);
   if (error?.code === "PGRST205" || error?.code === "42P01") {
-    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
+    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, xoGameEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
   }
   if (error) throw databaseError("getStoreSettings", error);
   const row = data as StoreSettingsRow | null;
   if (contactChannels.length) {
     return row
-      ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels }
-      : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
+      ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, xoGameEnabled: row.xo_game_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels }
+      : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, xoGameEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
   }
   const legacyChannels: ContactChannel[] = [];
   if (row?.line_qr_image) legacyChannels.push({ id: "legacy-line", name: "LINE", description: "สแกน QR Code เพื่อเพิ่มเพื่อน", url: "", iconImage: "", qrImage: row.line_qr_image, sortOrder: 10, createdAt: row.updated_at, updatedAt: row.updated_at });
   if (row?.facebook_url) legacyChannels.push({ id: "legacy-facebook", name: "Facebook", description: "เปิดหน้า Facebook ของร้าน", url: row.facebook_url, iconImage: "", qrImage: "", sortOrder: 20, createdAt: row.updated_at, updatedAt: row.updated_at });
   return row
-    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: legacyChannels }
-    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels: [] };
+    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, xoGameEnabled: row.xo_game_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: legacyChannels }
+    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, xoGameEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels: [] };
 }
 
 export async function getNotificationSoundUrl(): Promise<string> {
@@ -421,6 +515,7 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
       facebook_url: settings.facebookUrl,
       youtube_playlist_url: settings.youtubePlaylistUrl,
       youtube_queue_enabled: settings.youtubeQueueEnabled,
+      xo_game_enabled: settings.xoGameEnabled,
       notification_sound_url: settings.notificationSoundUrl,
       updated_at: settings.updatedAt,
     })
@@ -428,7 +523,7 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
     .single();
   if (error) throw databaseError("saveStoreSettings", error);
   const row = data as StoreSettingsRow;
-  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: settings.contactChannels };
+  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, xoGameEnabled: row.xo_game_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: settings.contactChannels };
 }
 
 function toContactChannel(row: ContactChannelRow): ContactChannel {

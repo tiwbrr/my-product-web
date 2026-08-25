@@ -29,6 +29,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Cat
     </section>
     <section className="sell-notice"><b>วิธีเลือกซื้อ</b><p>กดเมนูสามขีดมุมขวาบน หรือเลือกหมวดเกมด้านล่าง จากนั้นกดไอดีที่สนใจเพื่อดูรูปและรายละเอียดทั้งหมด หากต้องการสั่งซื้อให้ติดต่อร้านผ่าน LINE หรือ Facebook</p></section>
     <ProductCatalog products={products} categories={categories} initialFilters={catalogFilters} />
+    {settings.xoGameEnabled && <section className="xo-promo"><div><span>KUOZO MINI GAME</span><h2>เล่น X-O กับเพื่อนหรือบอท</h2><p>สร้างห้องออนไลน์ด้วยรหัส 6 ตัว หรือท้าทายบอทได้ทันทีสำหรับสมาชิก</p></div><Link href={user ? "/games/xo" : "/login?next=/games/xo"}>เริ่มเล่น X-O →</Link></section>}
     {settings.youtubeQueueEnabled && <YouTubePlaylist url={settings.youtubePlaylistUrl} user={user} initialQueue={youtubeQueue} />}
     {user ? <ChatRoom messages={messages} user={user} /> : <section className="chat-guest" id="chat"><span>MEMBER CHAT</span><h2>พูดคุยกับสมาชิกในร้าน</h2><p>สมัครสมาชิกหรือเข้าสู่ระบบเพื่ออ่านและส่งข้อความในแชท</p><div><Link href="/login" className="button button-light">เข้าสู่ระบบ</Link><Link href="/register" className="button chat-register-button">สมัครสมาชิก</Link></div></section>}
     <ContactSection settings={settings} />

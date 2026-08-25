@@ -45,9 +45,27 @@ export type StoreSettings = {
   facebookUrl: string;
   youtubePlaylistUrl: string;
   youtubeQueueEnabled: boolean;
+  xoGameEnabled: boolean;
   notificationSoundUrl: string;
   updatedAt: string;
   contactChannels: ContactChannel[];
+};
+
+export type XOGameStatus = "waiting" | "playing" | "x_won" | "o_won" | "draw";
+
+export type XOGameRoom = {
+  id: string;
+  code: string;
+  hostUserId: string;
+  hostName: string;
+  guestUserId: string | null;
+  guestName: string | null;
+  board: string;
+  turn: "X" | "O";
+  status: XOGameStatus;
+  rematchHost: boolean;
+  rematchGuest: boolean;
+  updatedAt: string;
 };
 
 export type YouTubeQueueItem = {
