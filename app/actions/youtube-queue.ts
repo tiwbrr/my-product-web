@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireStaff, requireUser } from "@/lib/auth";
-import { addYouTubeQueueItem, removeYouTubeQueueItem } from "@/lib/store";
+import { addYouTubeQueueItem, getStoreSettings, removeYouTubeQueueItem } from "@/lib/store";
 import { getYouTubeVideoId } from "@/lib/youtube";
 
 export type YouTubeQueueState = { error: string; success?: string; queuedAt?: string };
@@ -13,6 +13,8 @@ export async function enqueueYouTubeAction(
   formData: FormData,
 ): Promise<YouTubeQueueState> {
   const user = await requireUser();
+  const settings = await getStoreSettings();
+  if (!settings.youtubeQueueEnabled) return { error: "ระบบคิวเพลงถูกปิดใช้งานโดยผู้ดูแลร้าน" };
   const value = formData.get("youtubeUrl");
   const videoId = typeof value === "string" ? getYouTubeVideoId(value) : null;
   if (!videoId) return { error: "กรุณาใส่ลิงก์วิดีโอ YouTube ให้ถูกต้อง" };

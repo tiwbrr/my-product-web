@@ -43,6 +43,23 @@ export async function savePlaylistSettingsAction(
   }
 }
 
+export async function saveYouTubeQueueVisibilityAction(
+  _state: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  await requireStaff();
+  const current = await getStoreSettings();
+  const youtubeQueueEnabled = formData.get("enabled") === "on";
+  try {
+    await saveStoreSettings({ ...current, youtubeQueueEnabled, updatedAt: new Date().toISOString() });
+    revalidatePath("/");
+    revalidatePath("/admin");
+    return { error: "", success: youtubeQueueEnabled ? "เปิดระบบคิวเพลงบนหน้าร้านแล้ว" : "ปิดและซ่อนระบบคิวเพลงจากหน้าร้านแล้ว" };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "บันทึกสถานะระบบคิวเพลงไม่สำเร็จ" };
+  }
+}
+
 export async function saveNotificationSoundAction(
   _state: SettingsState,
   formData: FormData,

@@ -44,6 +44,7 @@ export type StoreSettings = {
   lineQrImage: string;
   facebookUrl: string;
   youtubePlaylistUrl: string;
+  youtubeQueueEnabled: boolean;
   notificationSoundUrl: string;
   updatedAt: string;
   contactChannels: ContactChannel[];

@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { FormSubmitButton } from "@/app/ui/form-submit-button";
-import { deleteContactChannelAction, saveContactChannelAction, saveNotificationSoundAction, savePlaylistSettingsAction, type SettingsState } from "@/app/actions/settings";
+import { deleteContactChannelAction, saveContactChannelAction, saveNotificationSoundAction, savePlaylistSettingsAction, saveYouTubeQueueVisibilityAction, type SettingsState } from "@/app/actions/settings";
 import type { ContactChannel, StoreSettings } from "@/lib/types";
 
 const initialState: SettingsState = { error: "" };
@@ -36,10 +36,17 @@ function ContactChannelForm({ channel }: { channel?: ContactChannel }) {
 
 export function ContactSettingsForm({ settings }: { settings: StoreSettings }) {
   const [playlistState, playlistAction, playlistPending] = useActionState(savePlaylistSettingsAction, initialState);
+  const [queueVisibilityState, queueVisibilityAction, queueVisibilityPending] = useActionState(saveYouTubeQueueVisibilityAction, initialState);
   const [soundState, soundAction, soundPending] = useActionState(saveNotificationSoundAction, initialState);
   return <div className="contact-settings-form">
     <section className="contact-admin-block">
       <div className="contact-admin-heading"><span>01</span><div><h3>YouTube Playlist</h3><p>ตั้งค่าเพลย์ลิสต์ที่แสดงบนหน้าร้าน</p></div></div>
+      <form action={queueVisibilityAction} className="youtube-visibility-form">
+        <label><input type="checkbox" name="enabled" defaultChecked={settings.youtubeQueueEnabled} /><span><b>เปิดระบบเพลงและคิว YouTube</b><small>เมื่อปิด ตัวเล่น ฟอร์มเพิ่มเพลง และรายการคิวจะถูกซ่อนจากหน้าร้านทั้งหมด</small></span></label>
+        {queueVisibilityState.error && <p className="form-error" role="alert">{queueVisibilityState.error}</p>}
+        {queueVisibilityState.success && <p className="form-success" role="status">{queueVisibilityState.success}</p>}
+        <button className="button button-dark" disabled={queueVisibilityPending}>{queueVisibilityPending ? "กำลังบันทึก..." : "บันทึกสถานะระบบเพลง"}</button>
+      </form>
       <form action={playlistAction} className="product-form">
         <label>ลิงก์ YouTube Playlist<input name="youtubePlaylistUrl" type="url" defaultValue={settings.youtubePlaylistUrl} placeholder="https://www.youtube.com/playlist?list=..." /><small className="field-help">เว้นว่างเพื่อซ่อนตัวเล่นจากหน้าร้าน</small></label>
         {playlistState.error && <p className="form-error" role="alert">{playlistState.error}</p>}

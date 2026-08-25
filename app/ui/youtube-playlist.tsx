@@ -75,6 +75,7 @@ export function YouTubePlaylist({
   initialQueue: YouTubeQueueItem[];
 }) {
   const [queue, setQueue] = useState(initialQueue);
+  const [enabled, setEnabled] = useState(true);
   const [formState, formAction, formPending] = useActionState(enqueueYouTubeAction, initialFormState);
   const [playerError, setPlayerError] = useState("");
   const playerWrapperRef = useRef<HTMLDivElement>(null);
@@ -91,8 +92,9 @@ export function YouTubePlaylist({
     try {
       const response = await fetch("/api/youtube/queue", { cache: "no-store" });
       if (!response.ok) return;
-      const payload = await response.json() as { queue: YouTubeQueueItem[] };
-      setQueue(payload.queue);
+      const payload = await response.json() as { enabled: boolean; queue: YouTubeQueueItem[] };
+      setEnabled(payload.enabled);
+      setQueue(payload.enabled ? payload.queue : []);
     } catch {
       // The next polling cycle retries automatically.
     }
@@ -146,7 +148,7 @@ export function YouTubePlaylist({
 
   useEffect(() => {
     const wrapper = playerWrapperRef.current;
-    if (!wrapper || (!headVideoId && !playlistId)) {
+    if (!enabled || !wrapper || (!headVideoId && !playlistId)) {
       playerRef.current?.destroy();
       playerRef.current = null;
       if (wrapper) wrapper.replaceChildren();
@@ -166,8 +168,8 @@ export function YouTubePlaylist({
         height: "100%",
         videoId: headVideoId || undefined,
         playerVars: headVideoId
-          ? { autoplay: 1, mute: 1, playsinline: 1, rel: 0 }
-          : { autoplay: 1, mute: 1, playsinline: 1, rel: 0, loop: 1, listType: "playlist", list: playlistId! },
+          ? { autoplay: 1, mute: 1, playsinline: 1, rel: 0, controls: 0, disablekb: 1 }
+          : { autoplay: 1, mute: 1, playsinline: 1, rel: 0, controls: 0, disablekb: 1, loop: 1, listType: "playlist", list: playlistId! },
         events: {
           onReady: (event) => {
             if (soundUnlockedRef.current) {
@@ -195,9 +197,9 @@ export function YouTubePlaylist({
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [advanceQueue, headItemId, headVideoId, playlistId]);
+  }, [advanceQueue, enabled, headItemId, headVideoId, playlistId]);
 
-  if (!user && !playlistId && !queue.length) return null;
+  if (!enabled || (!user && !playlistId && !queue.length)) return null;
 
   return <section className="playlist-section" id="playlist">
     <div className="sell-section-heading"><span>NOW PLAYING</span><h2>คิวเพลง YouTube</h2><p>{queue.length ? "กำลังเล่นเพลงที่สมาชิกเพิ่มเข้าคิว" : playlistId ? "คิวว่าง กำลังเล่น Playlist ที่ร้านตั้งไว้" : "เพิ่มเพลงแรกเข้าคิวได้เลย"}</p></div>

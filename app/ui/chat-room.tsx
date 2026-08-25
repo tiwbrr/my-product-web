@@ -7,6 +7,7 @@ import type { ChatMessage, SafeUser } from "@/lib/types";
 const initialState: ChatState = { error: "" };
 const messageLimit = 300;
 const cooldownSeconds = 5;
+const chatEmojis = ["😀", "😄", "😂", "😊", "😍", "🥰", "😎", "🤔", "😭", "😡", "👍", "👎", "🙏", "👏", "🎉", "❤️", "🔥", "✨", "💯", "🎮", "🎵", "✅", "❌", "💬"];
 
 type ToastMessage = ChatMessage & { toastId: string };
 type PushStatus = "unsupported" | "insecure" | "unconfigured" | "off" | "loading" | "on" | "denied" | "error";
@@ -26,8 +27,12 @@ function NotificationBell({ muted }: { muted: boolean }) {
 }
 
 export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMessage[]; user: SafeUser }) {
+  const visibleInitialMessages = initialMessages.slice(-50);
   const [state, formAction, pending] = useActionState(sendChatMessageAction, initialState);
-  const [messages, setMessages] = useState(initialMessages);
+  const [messages, setMessages] = useState(visibleInitialMessages);
+  const [hasOlderMessages, setHasOlderMessages] = useState(initialMessages.length > visibleInitialMessages.length);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [characterCount, setCharacterCount] = useState(0);
   const [cooldown, setCooldown] = useState(0);
@@ -36,8 +41,12 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
   const [vapidPublicKey, setVapidPublicKey] = useState("");
   const messageListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const knownMessageIdsRef = useRef(new Set(initialMessages.map((message) => message.id)));
-  const latestMessageTimeRef = useRef(initialMessages.at(-1)?.createdAt || new Date().toISOString());
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const knownMessageIdsRef = useRef(new Set(visibleInitialMessages.map((message) => message.id)));
+  const latestMessageTimeRef = useRef(visibleInitialMessages.at(-1)?.createdAt || new Date().toISOString());
+  const loadingOlderMessagesRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const scrollModeRef = useRef<"instant" | "smooth" | "preserve">("instant");
   const titleTimerRef = useRef<number | null>(null);
   const originalTitleRef = useRef("");
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -130,11 +139,74 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
         if (message.userId !== user.id) notifyIncomingMessage(message);
       });
       latestMessageTimeRef.current = incoming.at(-1)?.createdAt || latestMessageTimeRef.current;
-      setMessages((current) => [...current, ...incoming].slice(-250));
+      const messageList = messageListRef.current;
+      const distanceFromBottom = messageList
+        ? messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight
+        : 0;
+      const includesOwnMessage = incoming.some((message) => message.userId === user.id);
+      scrollModeRef.current = includesOwnMessage || distanceFromBottom < 100 ? "smooth" : "preserve";
+      setMessages((current) => [...current, ...incoming]);
     } catch {
       // The next polling cycle retries automatically.
     }
   }, [notifyIncomingMessage, user.id]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (loadingOlderMessagesRef.current || !hasOlderMessages || !messages.length) return;
+    loadingOlderMessagesRef.current = true;
+    setLoadingOlderMessages(true);
+    const messageList = messageListRef.current;
+    const previousScrollHeight = messageList?.scrollHeight ?? 0;
+
+    try {
+      const before = messages[0].createdAt;
+      const response = await fetch(`/api/chat/messages?before=${encodeURIComponent(before)}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json() as { messages: ChatMessage[]; hasMore: boolean };
+      const olderMessages = payload.messages.filter((message) => !knownMessageIdsRef.current.has(message.id));
+      olderMessages.forEach((message) => knownMessageIdsRef.current.add(message.id));
+      setHasOlderMessages(payload.hasMore);
+      if (!olderMessages.length) return;
+
+      scrollModeRef.current = "preserve";
+      setMessages((current) => [...olderMessages, ...current]);
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+        if (!messageList) return;
+        messageList.scrollTop = messageList.scrollHeight - previousScrollHeight;
+        lastScrollTopRef.current = messageList.scrollTop;
+      }));
+    } catch {
+      // The user can retry by scrolling to the top again or pressing the load button.
+    } finally {
+      loadingOlderMessagesRef.current = false;
+      setLoadingOlderMessages(false);
+    }
+  }, [hasOlderMessages, messages]);
+
+  const handleMessageListScroll = () => {
+    const messageList = messageListRef.current;
+    if (!messageList) return;
+    const isScrollingUp = messageList.scrollTop < lastScrollTopRef.current;
+    lastScrollTopRef.current = messageList.scrollTop;
+    if (isScrollingUp && messageList.scrollTop <= 48) void loadOlderMessages();
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const selectionStart = textarea.selectionStart ?? textarea.value.length;
+    const selectionEnd = textarea.selectionEnd ?? selectionStart;
+    const nextValue = `${textarea.value.slice(0, selectionStart)}${emoji}${textarea.value.slice(selectionEnd)}`;
+    if (nextValue.length > messageLimit) return;
+
+    textarea.value = nextValue;
+    setCharacterCount(nextValue.length);
+    const nextCursorPosition = selectionStart + emoji.length;
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  };
 
   useEffect(() => {
     originalTitleRef.current = document.title;
@@ -166,7 +238,14 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
   }, [stopTitleFlash]);
 
   useEffect(() => {
-    messageListRef.current?.scrollTo({ top: messageListRef.current.scrollHeight, behavior: "smooth" });
+    const messageList = messageListRef.current;
+    if (!messageList || scrollModeRef.current === "preserve") return;
+    messageList.scrollTo({
+      top: messageList.scrollHeight,
+      behavior: scrollModeRef.current === "smooth" ? "smooth" : "auto",
+    });
+    lastScrollTopRef.current = messageList.scrollHeight;
+    scrollModeRef.current = "preserve";
   }, [messages]);
 
   useEffect(() => {
@@ -174,7 +253,9 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
     const timer = window.setTimeout(() => {
       formRef.current?.reset();
       setCharacterCount(0);
+      setShowEmojiPicker(false);
       setCooldown(cooldownSeconds);
+      scrollModeRef.current = "smooth";
       void refreshMessages();
     }, 0);
     return () => window.clearTimeout(timer);
@@ -311,7 +392,14 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
       </div>
     </div>
     {pushError && <p className="chat-error" role="alert">{pushError}</p>}
-    <div className="chat-window" ref={messageListRef} aria-live="polite">
+    <div className="chat-window" ref={messageListRef} onScroll={handleMessageListScroll} aria-live="polite">
+      {Boolean(messages.length) && <div className="chat-history-control">
+        {loadingOlderMessages
+          ? <span>กำลังโหลดข้อความเก่า...</span>
+          : hasOlderMessages
+            ? <button type="button" onClick={() => void loadOlderMessages()}>เลื่อนขึ้นเพื่อโหลดข้อความเก่า</button>
+            : <span>ไม่มีข้อความเก่ากว่านี้แล้ว</span>}
+      </div>}
       {messages.length ? messages.map((item) => <article className={item.userId === user.id ? "chat-message own-message" : "chat-message"} key={item.id}>
         <div className="chat-avatar">{item.userName.charAt(0).toUpperCase()}</div>
         <div><header><b>{item.userName}</b><time dateTime={item.createdAt}>{new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(item.createdAt))} น.</time></header><p>{item.message}</p></div>
@@ -319,8 +407,11 @@ export function ChatRoom({ messages: initialMessages, user }: { messages: ChatMe
     </div>
     <form action={formAction} ref={formRef} className="chat-form">
       <div className="chat-compose">
-        <textarea name="message" rows={2} maxLength={messageLimit} required placeholder={`ส่งข้อความในชื่อ ${user.name}`} aria-label="ข้อความแชท" onInput={(event) => setCharacterCount(event.currentTarget.value.length)} />
-        <div className="chat-form-meta"><span>ส่งได้ทุก {cooldownSeconds} วินาที</span><b className={characterCount >= messageLimit ? "at-limit" : ""}>{characterCount}/{messageLimit}</b></div>
+        <textarea ref={textareaRef} name="message" rows={2} maxLength={messageLimit} required placeholder={`ส่งข้อความในชื่อ ${user.name}`} aria-label="ข้อความแชท" onInput={(event) => setCharacterCount(event.currentTarget.value.length)} onKeyDown={(event) => { if (event.key === "Escape") setShowEmojiPicker(false); }} />
+        {showEmojiPicker && <div className="chat-emoji-picker" id="chat-emoji-picker" role="group" aria-label="เลือกอิโมจิ">
+          {chatEmojis.map((emoji) => <button type="button" key={emoji} onClick={() => insertEmoji(emoji)} aria-label={`เพิ่มอิโมจิ ${emoji}`}>{emoji}</button>)}
+        </div>}
+        <div className="chat-form-meta"><div className="chat-form-tools"><button className="chat-emoji-toggle" type="button" onClick={() => setShowEmojiPicker((visible) => !visible)} aria-expanded={showEmojiPicker} aria-controls="chat-emoji-picker"><span aria-hidden="true">😊</span> อิโมจิ</button><span>ส่งได้ทุก {cooldownSeconds} วินาที</span></div><b className={characterCount >= messageLimit ? "at-limit" : ""}>{characterCount}/{messageLimit}</b></div>
       </div>
       <button disabled={pending || cooldown > 0} type="submit">{pending ? "กำลังส่ง..." : cooldown ? `รอ ${cooldown} วิ` : "ส่งข้อความ"}</button>
     </form>

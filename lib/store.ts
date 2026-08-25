@@ -43,6 +43,7 @@ type StoreSettingsRow = {
   line_qr_image: string;
   facebook_url: string;
   youtube_playlist_url: string;
+  youtube_queue_enabled?: boolean | null;
   notification_sound_url?: string | null;
   updated_at: string;
 };
@@ -384,21 +385,21 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     getContactChannels(),
   ]);
   if (error?.code === "PGRST205" || error?.code === "42P01") {
-    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", notificationSoundUrl: "", updatedAt: "", contactChannels };
+    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
   }
   if (error) throw databaseError("getStoreSettings", error);
   const row = data as StoreSettingsRow | null;
   if (contactChannels.length) {
     return row
-      ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels }
-      : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", notificationSoundUrl: "", updatedAt: "", contactChannels };
+      ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels }
+      : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
   }
   const legacyChannels: ContactChannel[] = [];
   if (row?.line_qr_image) legacyChannels.push({ id: "legacy-line", name: "LINE", description: "สแกน QR Code เพื่อเพิ่มเพื่อน", url: "", iconImage: "", qrImage: row.line_qr_image, sortOrder: 10, createdAt: row.updated_at, updatedAt: row.updated_at });
   if (row?.facebook_url) legacyChannels.push({ id: "legacy-facebook", name: "Facebook", description: "เปิดหน้า Facebook ของร้าน", url: row.facebook_url, iconImage: "", qrImage: "", sortOrder: 20, createdAt: row.updated_at, updatedAt: row.updated_at });
   return row
-    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: legacyChannels }
-    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", notificationSoundUrl: "", updatedAt: "", contactChannels: [] };
+    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: legacyChannels }
+    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels: [] };
 }
 
 export async function getNotificationSoundUrl(): Promise<string> {
@@ -419,6 +420,7 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
       line_qr_image: settings.lineQrImage,
       facebook_url: settings.facebookUrl,
       youtube_playlist_url: settings.youtubePlaylistUrl,
+      youtube_queue_enabled: settings.youtubeQueueEnabled,
       notification_sound_url: settings.notificationSoundUrl,
       updated_at: settings.updatedAt,
     })
@@ -426,7 +428,7 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
     .single();
   if (error) throw databaseError("saveStoreSettings", error);
   const row = data as StoreSettingsRow;
-  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: settings.contactChannels };
+  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: settings.contactChannels };
 }
 
 function toContactChannel(row: ContactChannelRow): ContactChannel {
@@ -480,6 +482,13 @@ export async function removeContactChannel(id: string): Promise<ContactChannel |
 }
 
 const chatRetentionMilliseconds = 7 * 24 * 60 * 60 * 1000;
+export const chatPageSize = 50;
+
+type ChatMessageQuery = {
+  after?: string;
+  before?: string;
+  limit?: number;
+};
 
 export async function removeExpiredChatMessages(): Promise<void> {
   const cutoff = new Date(Date.now() - chatRetentionMilliseconds).toISOString();
@@ -487,18 +496,23 @@ export async function removeExpiredChatMessages(): Promise<void> {
   if (error) throw databaseError("removeExpiredChatMessages", error);
 }
 
-export async function getChatMessages(after?: string): Promise<ChatMessage[]> {
+export async function getChatMessages({ after, before, limit = chatPageSize }: ChatMessageQuery = {}): Promise<ChatMessage[]> {
   const cutoff = new Date(Date.now() - chatRetentionMilliseconds).toISOString();
   const afterTime = after ? Date.parse(after) : Number.NaN;
+  const beforeTime = before ? Date.parse(before) : Number.NaN;
+  const pageLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
   const query = getSupabaseAdmin()
     .from("chat_messages")
-    .select("id, user_id, message, created_at, store_users(name)")
-    .order("created_at", { ascending: true });
-  const { data, error } = Number.isFinite(afterTime) && afterTime > Date.parse(cutoff)
-    ? await query.gt("created_at", new Date(afterTime).toISOString())
-    : await query.gte("created_at", cutoff);
+    .select("id, user_id, message, created_at, store_users(name)");
+  const isAfterQuery = Number.isFinite(afterTime) && afterTime > Date.parse(cutoff);
+  const isBeforeQuery = !isAfterQuery && Number.isFinite(beforeTime) && beforeTime > Date.parse(cutoff);
+  const { data, error } = isAfterQuery
+    ? await query.gt("created_at", new Date(afterTime).toISOString()).order("created_at", { ascending: true }).limit(pageLimit)
+    : isBeforeQuery
+      ? await query.gte("created_at", cutoff).lt("created_at", new Date(beforeTime).toISOString()).order("created_at", { ascending: false }).limit(pageLimit)
+      : await query.gte("created_at", cutoff).order("created_at", { ascending: false }).limit(pageLimit);
   if (error) throw databaseError("getChatMessages", error);
-  return (data as ChatMessageRow[]).map((row) => {
+  const rows = (data as ChatMessageRow[]).map((row) => {
     const relatedUser = Array.isArray(row.store_users) ? row.store_users[0] : row.store_users;
     return {
       id: row.id,
@@ -508,6 +522,7 @@ export async function getChatMessages(after?: string): Promise<ChatMessage[]> {
       createdAt: row.created_at,
     };
   });
+  return isAfterQuery ? rows : rows.reverse();
 }
 
 export async function getLatestChatMessageTime(userId: string): Promise<string | null> {
