@@ -58,6 +58,8 @@ export type XOGameRoom = {
   code: string;
   hostUserId: string;
   hostName: string;
+  hostMark: "X" | "O";
+  boardSize: 3 | 5 | 10;
   guestUserId: string | null;
   guestName: string | null;
   board: string;

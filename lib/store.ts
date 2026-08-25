@@ -88,6 +88,8 @@ type XOGameRoomRow = {
   id: string;
   code: string;
   host_user_id: string;
+  host_mark: "X" | "O";
+  board_size: 3 | 5 | 10;
   guest_user_id: string | null;
   board: string;
   turn: "X" | "O";
@@ -399,7 +401,7 @@ export async function completeYouTubeQueueItem(id: string): Promise<boolean> {
   return data === true;
 }
 
-const xoRoomSelect = "id, code, host_user_id, guest_user_id, board, turn, status, rematch_host, rematch_guest, updated_at, host:store_users!xo_rooms_host_user_id_fkey(name), guest:store_users!xo_rooms_guest_user_id_fkey(name)";
+const xoRoomSelect = "id, code, host_user_id, host_mark, board_size, guest_user_id, board, turn, status, rematch_host, rematch_guest, updated_at, host:store_users!xo_rooms_host_user_id_fkey(name), guest:store_users!xo_rooms_guest_user_id_fkey(name)";
 
 function toXOGameRoom(row: XOGameRoomRow): XOGameRoom {
   const host = Array.isArray(row.host) ? row.host[0] : row.host;
@@ -409,6 +411,8 @@ function toXOGameRoom(row: XOGameRoomRow): XOGameRoom {
     code: row.code,
     hostUserId: row.host_user_id,
     hostName: host?.name ?? "สมาชิก",
+    hostMark: row.host_mark,
+    boardSize: row.board_size,
     guestUserId: row.guest_user_id,
     guestName: guest?.name ?? null,
     board: row.board,
@@ -420,11 +424,11 @@ function toXOGameRoom(row: XOGameRoomRow): XOGameRoom {
   };
 }
 
-export async function createXOGameRoom(id: string, code: string, userId: string): Promise<XOGameRoom> {
+export async function createXOGameRoom(id: string, code: string, userId: string, boardSize: 3 | 5 | 10): Promise<XOGameRoom> {
   await getSupabaseAdmin().from("xo_rooms").delete().lt("expires_at", new Date().toISOString());
   const { data, error } = await getSupabaseAdmin()
     .from("xo_rooms")
-    .insert({ id, code, host_user_id: userId })
+    .insert({ id, code, host_user_id: userId, board_size: boardSize, board: ".".repeat(boardSize * boardSize) })
     .select(xoRoomSelect)
     .single();
   if (error) throw databaseError("createXOGameRoom", error);

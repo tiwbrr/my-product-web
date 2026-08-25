@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   const context = await getAuthorizedContext();
   if ("response" in context) return context.response;
 
-  let body: { action?: string; roomId?: string; code?: string; cell?: number };
+  let body: { action?: string; roomId?: string; code?: string; cell?: number; boardSize?: number };
   try {
     body = await request.json();
   } catch {
@@ -76,9 +76,10 @@ export async function POST(request: Request) {
 
   try {
     if (body.action === "create") {
+      const boardSize = body.boardSize === 5 || body.boardSize === 10 ? body.boardSize : 3;
       for (let attempt = 0; attempt < 5; attempt += 1) {
         try {
-          const room = await createXOGameRoom(randomUUID(), roomCode(), context.user.id);
+          const room = await createXOGameRoom(randomUUID(), roomCode(), context.user.id, boardSize);
           return noStore({ room }, { status: 201 });
         } catch (error) {
           if (!(error instanceof Error) || !error.message.includes("23505") || attempt === 4) throw error;
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
     if (!roomId) return noStore({ error: "กรุณาระบุห้อง" }, { status: 400 });
 
     if (body.action === "move") {
-      if (!Number.isInteger(body.cell) || (body.cell ?? -1) < 0 || (body.cell ?? 9) > 8) {
+      if (!Number.isInteger(body.cell) || (body.cell ?? -1) < 0 || (body.cell ?? 100) > 99) {
         return noStore({ error: "ตำแหน่งเดินไม่ถูกต้อง" }, { status: 400 });
       }
       await playXOMove(roomId, context.user.id, body.cell as number);
