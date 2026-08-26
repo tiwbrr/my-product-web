@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User, XOGameRoom, XOPlayerStats, YouTubeQueueItem } from "@/lib/types";
+import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User, XOGameRoom, XOLobbyRoom, XOPlayerStats, YouTubeQueueItem } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -111,6 +111,18 @@ type XOPlayerStatsRow = {
   losses: number;
   draws: number;
   store_users: { name: string } | { name: string }[] | null;
+};
+
+type XOLobbyRoomRow = {
+  id: string;
+  code: string;
+  host_user_id: string;
+  guest_user_id: string | null;
+  board_size: 3 | 5 | 10;
+  status: XOGameRoom["status"];
+  created_at: string;
+  host: { name: string } | { name: string }[] | null;
+  guest: { name: string } | { name: string }[] | null;
 };
 
 type YouTubeQueueRow = {
@@ -463,6 +475,31 @@ export async function getXOGameRoomByCode(code: string): Promise<XOGameRoom | nu
     .maybeSingle();
   if (error) throw databaseError("getXOGameRoomByCode", error);
   return data ? toXOGameRoom(data as unknown as XOGameRoomRow) : null;
+}
+
+export async function getLobbyXOGameRooms(): Promise<XOLobbyRoom[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("xo_rooms")
+    .select("id, code, host_user_id, guest_user_id, board_size, status, created_at, host:store_users!xo_rooms_host_user_id_fkey(name), guest:store_users!xo_rooms_guest_user_id_fkey(name)")
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(30);
+  if (error) throw databaseError("getLobbyXOGameRooms", error);
+  return (data as unknown as XOLobbyRoomRow[]).map((row) => {
+    const host = Array.isArray(row.host) ? row.host[0] : row.host;
+    const guest = Array.isArray(row.guest) ? row.guest[0] : row.guest;
+    return {
+      id: row.id,
+      code: row.code,
+      hostUserId: row.host_user_id,
+      hostName: host?.name ?? "สมาชิก",
+      guestUserId: row.guest_user_id,
+      guestName: guest?.name ?? null,
+      boardSize: row.board_size,
+      status: row.status,
+      createdAt: row.created_at,
+    };
+  });
 }
 
 export async function joinXOGameRoom(id: string, userId: string): Promise<void> {

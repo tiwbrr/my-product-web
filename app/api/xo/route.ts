@@ -5,6 +5,7 @@ import {
   getStoreSettings,
   getXOGameRoom,
   getXOGameRoomByCode,
+  getLobbyXOGameRooms,
   joinXOGameRoom,
   leaveXOGameRoom,
   playXOMove,
@@ -48,15 +49,22 @@ async function getAuthorizedContext() {
 export async function GET(request: Request) {
   const context = await getAuthorizedContext();
   if ("response" in context) return context.response;
-  const id = new URL(request.url).searchParams.get("roomId")?.trim() ?? "";
+  const searchParams = new URL(request.url).searchParams;
+
+  if (searchParams.get("openRooms") === "1") {
+    try {
+      return noStore({ rooms: await getLobbyXOGameRooms() });
+    } catch (error) {
+      return noStore({ error: errorMessage(error) }, { status: 500 });
+    }
+  }
+
+  const id = searchParams.get("roomId")?.trim() ?? "";
   if (!id) return noStore({ error: "กรุณาระบุห้อง" }, { status: 400 });
 
   try {
     const room = await getXOGameRoom(id);
     if (!room) return noStore({ error: "ไม่พบห้องนี้หรือห้องหมดอายุแล้ว" }, { status: 404 });
-    if (room.hostUserId !== context.user.id && room.guestUserId !== context.user.id) {
-      return noStore({ error: "คุณไม่ได้เป็นผู้เล่นในห้องนี้" }, { status: 403 });
-    }
     return noStore({ room });
   } catch (error) {
     return noStore({ error: errorMessage(error) }, { status: 500 });

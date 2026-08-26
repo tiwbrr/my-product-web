@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SafeUser, XOGameRoom } from "@/lib/types";
+import type { SafeUser, XOGameRoom, XOLobbyRoom } from "@/lib/types";
 
 type Mark = "X" | "O";
 type Cell = Mark | null;
@@ -156,6 +156,13 @@ function roomBoard(board: string): Cell[] {
   return board.split("").map((cell) => cell === "X" || cell === "O" ? cell : null);
 }
 
+function lobbyStatus(status: XOLobbyRoom["status"]) {
+  if (status === "waiting") return "รอผู้เล่น";
+  if (status === "playing") return "กำลังเล่น";
+  if (status === "draw") return "จบเกม · เสมอ";
+  return "จบเกมแล้ว";
+}
+
 function Board({ board, size, disabled, winningLine, onMove }: { board: Cell[]; size: BoardSize; disabled: boolean; winningLine?: readonly number[] | null; onMove: (cell: number) => void }) {
   return <div className={`xo-board xo-board-${size}`} style={{ "--xo-board-size": size } as React.CSSProperties} role="grid" aria-label={`กระดานเกม X-O ขนาด ${size} คูณ ${size}`}>
     {board.map((mark, index) => <button
@@ -180,12 +187,16 @@ export function XOGame({ user }: { user: SafeUser }) {
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>("medium");
   const [onlineBoardSize, setOnlineBoardSize] = useState<BoardSize>(3);
   const [room, setRoom] = useState<XOGameRoom | null>(null);
+  const [openRooms, setOpenRooms] = useState<XOLobbyRoom[]>([]);
+  const [loadingOpenRooms, setLoadingOpenRooms] = useState(true);
+  const [openRoomsError, setOpenRoomsError] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const pollingRef = useRef(false);
+  const openRoomsPollingRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const botSoundSnapshotRef = useRef(".........");
   const roomSoundSnapshotRef = useRef<{ id: string; board: string; status: XOGameRoom["status"] } | null>(null);
@@ -194,7 +205,11 @@ export function XOGame({ user }: { user: SafeUser }) {
   const botMark = oppositeMark(humanMark);
   const roomId = room?.id;
   const onlineMyMark: Mark | null = room
-    ? room.hostUserId === user.id ? room.hostMark : oppositeMark(room.hostMark)
+    ? room.hostUserId === user.id
+      ? room.hostMark
+      : room.guestUserId === user.id
+        ? oppositeMark(room.hostMark)
+        : null
     : null;
 
   const unlockAudio = useCallback(() => {
@@ -275,7 +290,7 @@ export function XOGame({ user }: { user: SafeUser }) {
     if (addedIndex >= 0) playGameSound(room.board[addedIndex] === "X" ? "x" : "o");
     if (previous.status === "playing" && room.status !== "playing") {
       const playerWon = (room.status === "x_won" && onlineMyMark === "X") || (room.status === "o_won" && onlineMyMark === "O");
-      const outcome = room.status === "draw" ? "draw" : playerWon ? "win" : "lose";
+      const outcome = room.status === "draw" ? "draw" : onlineMyMark === null ? "win" : playerWon ? "win" : "lose";
       window.setTimeout(() => playGameSound(outcome), 170);
     }
   }, [onlineMyMark, playGameSound, room]);
@@ -319,6 +334,33 @@ export function XOGame({ user }: { user: SafeUser }) {
     return () => window.clearInterval(timer);
   }, [refreshRoom, roomId]);
 
+  const refreshOpenRooms = useCallback(async () => {
+    if (openRoomsPollingRef.current) return;
+    openRoomsPollingRef.current = true;
+    try {
+      const response = await fetch("/api/xo?openRooms=1", { cache: "no-store" });
+      const payload = await response.json() as { rooms?: XOLobbyRoom[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "โหลดรายชื่อห้องไม่สำเร็จ");
+      setOpenRooms(payload.rooms ?? []);
+      setOpenRoomsError("");
+    } catch (listError) {
+      setOpenRoomsError(listError instanceof Error ? listError.message : "โหลดรายชื่อห้องไม่สำเร็จ");
+    } finally {
+      setLoadingOpenRooms(false);
+      openRoomsPollingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "online" || roomId) return;
+    const initialTimer = window.setTimeout(() => void refreshOpenRooms(), 0);
+    const timer = window.setInterval(() => void refreshOpenRooms(), 4000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
+  }, [mode, refreshOpenRooms, roomId]);
+
   const postAction = async (body: Record<string, unknown>) => {
     setBusy(true);
     setError("");
@@ -335,6 +377,28 @@ export function XOGame({ user }: { user: SafeUser }) {
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "ดำเนินการไม่สำเร็จ");
       return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const joinRoom = async (code: string) => {
+    setJoinCode(code);
+    const result = await postAction({ action: "join", code });
+    if (!result) void refreshOpenRooms();
+  };
+
+  const watchRoom = async (id: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/xo?roomId=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const payload = await response.json() as { room?: XOGameRoom; error?: string };
+      if (!response.ok || !payload.room) throw new Error(payload.error || "เปิดห้องรับชมไม่สำเร็จ");
+      setRoom(payload.room);
+    } catch (watchError) {
+      setError(watchError instanceof Error ? watchError.message : "เปิดห้องรับชมไม่สำเร็จ");
+      void refreshOpenRooms();
     } finally {
       setBusy(false);
     }
@@ -373,8 +437,9 @@ export function XOGame({ user }: { user: SafeUser }) {
   const leaveRoom = async () => {
     if (!room) return;
     const leavingRoomId = room.id;
+    const isPlayer = room.hostUserId === user.id || room.guestUserId === user.id;
     setRoom(null);
-    await postAction({ action: "leave", roomId: leavingRoomId });
+    if (isPlayer) await postAction({ action: "leave", roomId: leavingRoomId });
   };
 
   const copyCode = async () => {
@@ -417,39 +482,57 @@ export function XOGame({ user }: { user: SafeUser }) {
     <div className="xo-game-heading"><div className="xo-heading-controls"><button type="button" onClick={() => setMode(null)}>← เลือกโหมด</button><Link href="/games/xo/leaderboard">🏆 อันดับ</Link><button className="xo-sound-toggle" type="button" aria-pressed={soundEnabled} onClick={() => setSoundEnabled((enabled) => !enabled)}>{soundEnabled ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด"}</button></div><div><span>ONLINE MATCH</span><h1>เล่น X-O ออนไลน์</h1></div></div>
     <div className="xo-online-lobby">
       <article><span>สร้างห้องใหม่</span><h2>ชวนเพื่อนมาเล่น</h2><p>เลือกขนาดกระดานแล้วส่งรหัสห้อง 6 ตัวให้สมาชิกอีกคน</p><div className="xo-lobby-size-picker">{([3, 5, 10] as const).map((size) => <button type="button" className={onlineBoardSize === size ? "active" : ""} onClick={() => setOnlineBoardSize(size)} key={size}>{size}×{size}<small>เรียง {winLength(size)}</small></button>)}</div><button className="xo-primary-button" type="button" disabled={busy} onClick={() => void postAction({ action: "create", boardSize: onlineBoardSize })}>{busy ? "กำลังสร้าง..." : `สร้างห้อง ${onlineBoardSize}×${onlineBoardSize}`}</button></article>
-      <article><span>เข้าร่วมห้อง</span><h2>มีรหัสห้องแล้ว</h2><p>กรอกรหัส 6 ตัวที่ได้รับจากผู้สร้างห้อง</p><form onSubmit={(event) => { event.preventDefault(); void postAction({ action: "join", code: joinCode }); }}><input value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))} maxLength={6} placeholder="ABC123" aria-label="รหัสห้อง" /><button className="xo-primary-button" disabled={busy || joinCode.length !== 6}>{busy ? "กำลังเข้า..." : "เข้าร่วมห้อง"}</button></form></article>
+      <article><span>เข้าร่วมห้อง</span><h2>มีรหัสห้องแล้ว</h2><p>กรอกรหัส 6 ตัวที่ได้รับจากผู้สร้างห้อง</p><form onSubmit={(event) => { event.preventDefault(); void joinRoom(joinCode); }}><input value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))} maxLength={6} placeholder="ABC123" aria-label="รหัสห้อง" /><button className="xo-primary-button" disabled={busy || joinCode.length !== 6}>{busy ? "กำลังเข้า..." : "เข้าร่วมห้อง"}</button></form></article>
     </div>
+    <section className="xo-open-rooms" aria-labelledby="xo-open-rooms-heading">
+      <header><div><span>ONLINE ROOMS</span><h2 id="xo-open-rooms-heading">ห้องออนไลน์ทั้งหมด</h2><p>เข้าร่วมห้องที่กำลังรอ หรือรับชมการแข่งขันที่เริ่มแล้ว</p></div><button type="button" disabled={loadingOpenRooms} onClick={() => void refreshOpenRooms()}>{loadingOpenRooms ? "กำลังโหลด..." : "รีเฟรช"}</button></header>
+      {openRooms.length ? <div className="xo-open-room-list">{openRooms.map((openRoom) => <article key={openRoom.code}>
+        <div className="xo-open-room-host"><i>{openRoom.hostName.charAt(0).toUpperCase()}</i><span><b>{openRoom.hostName}</b><small>{openRoom.guestName ? `พบกับ ${openRoom.guestName}` : "กำลังรอคู่แข่ง"}</small></span></div>
+        <span className={`xo-lobby-status status-${openRoom.status}`}>{lobbyStatus(openRoom.status)}</span>
+        <div className="xo-open-room-detail"><strong>{openRoom.boardSize}×{openRoom.boardSize}</strong><span>เรียง {winLength(openRoom.boardSize)} ชนะ</span></div>
+        <div className="xo-open-room-code"><span>รหัส</span><b>{openRoom.code}</b></div>
+        <time dateTime={openRoom.createdAt}>{new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(openRoom.createdAt))} น.</time>
+        {openRoom.status === "waiting" && openRoom.hostUserId !== user.id
+          ? <button className="xo-primary-button" type="button" disabled={busy} onClick={() => void joinRoom(openRoom.code)}>{busy && joinCode === openRoom.code ? "กำลังเข้า..." : "เข้าร่วม"}</button>
+          : <button className="xo-watch-button" type="button" disabled={busy} onClick={() => void watchRoom(openRoom.id)}>{openRoom.hostUserId === user.id || openRoom.guestUserId === user.id ? "กลับเข้าห้อง" : "รับชม"}</button>}
+      </article>)}</div> : <div className="xo-open-room-empty"><b>{loadingOpenRooms ? "กำลังค้นหาห้อง..." : "ยังไม่มีห้องออนไลน์"}</b><p>{loadingOpenRooms ? "รอสักครู่ ระบบกำลังโหลดรายชื่อห้อง" : "สร้างห้องใหม่ได้เลย แล้วผู้เล่นคนอื่นจะเห็นห้องของคุณในรายการนี้"}</p></div>}
+      {openRoomsError && <p className="xo-error" role="alert">{openRoomsError}</p>}
+    </section>
     {error && <p className="xo-error" role="alert">{error}</p>}
   </section>;
 
   const board = roomBoard(room.board);
   const onlineResult = gameResult(board, room.boardSize);
   const isHost = room.hostUserId === user.id;
+  const isGuest = room.guestUserId === user.id;
+  const isSpectator = !isHost && !isGuest;
   const guestMark = oppositeMark(room.hostMark);
-  const myMark: Mark = isHost ? room.hostMark : guestMark;
-  const myTurn = room.status === "playing" && room.turn === myMark;
+  const myMark: Mark | null = isHost ? room.hostMark : isGuest ? guestMark : null;
+  const myTurn = myMark !== null && room.status === "playing" && room.turn === myMark;
   const opponentName = isHost ? room.guestName : room.hostName;
-  const iAmReady = isHost ? room.rematchHost : room.rematchGuest;
-  const opponentReady = isHost ? room.rematchGuest : room.rematchHost;
+  const iAmReady = isHost ? room.rematchHost : isGuest ? room.rematchGuest : false;
+  const opponentReady = isHost ? room.rematchGuest : isGuest ? room.rematchHost : false;
   const xPlayerName = room.hostMark === "X" ? room.hostName : room.guestName;
   const oPlayerName = room.hostMark === "O" ? room.hostName : room.guestName;
   const winnerName = room.status === "x_won" ? xPlayerName : room.status === "o_won" ? oPlayerName : null;
-  const onlineStatus = room.status === "waiting" ? "กำลังรอสมาชิกเข้าร่วมห้อง..."
+  const onlineStatus = isSpectator && room.status === "playing" ? `กำลังรับชม · ตาของ ${room.turn === room.hostMark ? room.hostName : room.guestName ?? "ผู้เข้าร่วม"}`
+    : room.status === "waiting" ? "กำลังรอสมาชิกเข้าร่วมห้อง..."
     : room.status === "draw" ? "เสมอกัน"
       : winnerName ? `${winnerName} ชนะ!`
         : myTurn ? "ตาของคุณ" : `รอ ${opponentName ?? "คู่แข่ง"} เดิน`;
 
   return <section className="xo-shell xo-game-shell">
-    <div className="xo-game-heading"><div className="xo-heading-controls"><button type="button" onClick={() => void leaveRoom()}>← ออกจากห้อง</button><Link href="/games/xo/leaderboard">🏆 อันดับ</Link><button className="xo-sound-toggle" type="button" aria-pressed={soundEnabled} onClick={() => setSoundEnabled((enabled) => !enabled)}>{soundEnabled ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด"}</button></div><div><span>ROOM {room.code}</span><h1>การแข่งขันออนไลน์</h1></div></div>
+    <div className="xo-game-heading"><div className="xo-heading-controls"><button type="button" onClick={() => void leaveRoom()}>← {isSpectator ? "ออกจากการรับชม" : "ออกจากห้อง"}</button><Link href="/games/xo/leaderboard">🏆 อันดับ</Link><button className="xo-sound-toggle" type="button" aria-pressed={soundEnabled} onClick={() => setSoundEnabled((enabled) => !enabled)}>{soundEnabled ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด"}</button></div><div><span>{isSpectator ? "SPECTATING" : `ROOM ${room.code}`}</span><h1>{isSpectator ? "รับชมการแข่งขัน" : "การแข่งขันออนไลน์"}</h1></div></div>
     <div className="xo-match-card">
       {winnerName && (room.status === "x_won" ? myMark === "X" : myMark === "O") && <Celebration />}
       <div className="xo-room-code"><span>รหัสห้อง</span><strong>{room.code}</strong><small>รอบที่ {room.roundNumber} · {room.boardSize}×{room.boardSize} · เรียง {winLength(room.boardSize)} ชนะ</small><button type="button" onClick={() => void copyCode()}>{copied ? "คัดลอกแล้ว" : "คัดลอก"}</button></div>
       <div className="xo-players"><div className={room.turn === room.hostMark && room.status === "playing" ? "active" : ""}><i className={`mark-${room.hostMark.toLowerCase()}`}>{room.hostMark}</i><span><b>{room.hostName}</b><small>ผู้สร้างห้อง{room.hostMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div><em>VS</em><div className={room.turn === guestMark && room.status === "playing" ? "active" : ""}><i className={`mark-${guestMark.toLowerCase()}`}>{guestMark}</i><span><b>{room.guestName ?? "กำลังรอ..."}</b><small>ผู้เข้าร่วม{guestMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div></div>
       <LiveScore leftName={room.hostName} leftWins={room.hostWins} leftLosses={room.guestWins} rightName={room.guestName ?? "ผู้เข้าร่วม"} rightWins={room.guestWins} rightLosses={room.hostWins} draws={room.roomDraws} />
+      {isSpectator && <p className="xo-spectator-note">👁 คุณกำลังรับชมเกมนี้ กระดานจะอัปเดตอัตโนมัติ</p>}
       <p className={`xo-status ${room.status !== "playing" && room.status !== "waiting" ? "finished" : ""}`}>{onlineStatus}</p>
-      <Board board={board} size={room.boardSize} disabled={busy || !myTurn} winningLine={onlineResult?.line} onMove={(cell) => void postAction({ action: "move", roomId: room.id, cell })} />
-      {room.status === "waiting" && <p className="xo-room-hint">ส่งรหัส <b>{room.code}</b> ให้สมาชิกอีกคน แล้วรอหน้านี้อัปเดตอัตโนมัติ</p>}
-      {["x_won", "o_won", "draw"].includes(room.status) && <div className="xo-rematch"><button className="xo-primary-button" type="button" disabled={busy || iAmReady} onClick={() => void postAction({ action: "rematch", roomId: room.id })}>{iAmReady ? "รอคู่แข่งยืนยัน..." : "ขอเล่นใหม่และสลับคนเริ่ม"}</button>{opponentReady && !iAmReady && <span>คู่แข่งขอเล่นใหม่แล้ว · รอบหน้าจะสลับคนเริ่ม</span>}</div>}
+      <Board board={board} size={room.boardSize} disabled={busy || isSpectator || !myTurn} winningLine={onlineResult?.line} onMove={(cell) => void postAction({ action: "move", roomId: room.id, cell })} />
+      {room.status === "waiting" && !isSpectator && <p className="xo-room-hint">ส่งรหัส <b>{room.code}</b> ให้สมาชิกอีกคน แล้วรอหน้านี้อัปเดตอัตโนมัติ</p>}
+      {!isSpectator && ["x_won", "o_won", "draw"].includes(room.status) && <div className="xo-rematch"><button className="xo-primary-button" type="button" disabled={busy || iAmReady} onClick={() => void postAction({ action: "rematch", roomId: room.id })}>{iAmReady ? "รอคู่แข่งยืนยัน..." : "ขอเล่นใหม่และสลับคนเริ่ม"}</button>{opponentReady && !iAmReady && <span>คู่แข่งขอเล่นใหม่แล้ว · รอบหน้าจะสลับคนเริ่ม</span>}</div>}
       {error && <p className="xo-error" role="alert">{error}</p>}
     </div>
   </section>;

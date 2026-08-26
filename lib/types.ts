@@ -74,6 +74,18 @@ export type XOGameRoom = {
   updatedAt: string;
 };
 
+export type XOLobbyRoom = {
+  id: string;
+  code: string;
+  hostUserId: string;
+  hostName: string;
+  guestUserId: string | null;
+  guestName: string | null;
+  boardSize: 3 | 5 | 10;
+  status: XOGameStatus;
+  createdAt: string;
+};
+
 export type XOPlayerStats = {
   userId: string;
   userName: string;
