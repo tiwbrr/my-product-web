@@ -43,6 +43,8 @@ export type Product = {
 export type StoreSettings = {
   lineQrImage: string;
   facebookUrl: string;
+  homeHeroMediaUrl: string;
+  homeHeroMediaType: "" | "image" | "video";
   youtubePlaylistUrl: string;
   youtubeQueueEnabled: boolean;
   xoGameEnabled: boolean;

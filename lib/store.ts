@@ -42,6 +42,8 @@ type ProductRow = {
 type StoreSettingsRow = {
   line_qr_image: string;
   facebook_url: string;
+  home_hero_media_url?: string | null;
+  home_hero_media_type?: string | null;
   youtube_playlist_url: string;
   youtube_queue_enabled?: boolean | null;
   xo_game_enabled?: boolean | null;
@@ -566,21 +568,21 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     getContactChannels(),
   ]);
   if (error?.code === "PGRST205" || error?.code === "42P01") {
-    return { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, xoGameEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
+    return { lineQrImage: "", facebookUrl: "", homeHeroMediaUrl: "", homeHeroMediaType: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, xoGameEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
   }
   if (error) throw databaseError("getStoreSettings", error);
   const row = data as StoreSettingsRow | null;
   if (contactChannels.length) {
     return row
-      ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, xoGameEnabled: row.xo_game_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels }
-      : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, xoGameEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
+      ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, homeHeroMediaUrl: row.home_hero_media_url ?? "", homeHeroMediaType: row.home_hero_media_type === "image" || row.home_hero_media_type === "video" ? row.home_hero_media_type : "", youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, xoGameEnabled: row.xo_game_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels }
+      : { lineQrImage: "", facebookUrl: "", homeHeroMediaUrl: "", homeHeroMediaType: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, xoGameEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels };
   }
   const legacyChannels: ContactChannel[] = [];
   if (row?.line_qr_image) legacyChannels.push({ id: "legacy-line", name: "LINE", description: "สแกน QR Code เพื่อเพิ่มเพื่อน", url: "", iconImage: "", qrImage: row.line_qr_image, sortOrder: 10, createdAt: row.updated_at, updatedAt: row.updated_at });
   if (row?.facebook_url) legacyChannels.push({ id: "legacy-facebook", name: "Facebook", description: "เปิดหน้า Facebook ของร้าน", url: row.facebook_url, iconImage: "", qrImage: "", sortOrder: 20, createdAt: row.updated_at, updatedAt: row.updated_at });
   return row
-    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, xoGameEnabled: row.xo_game_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: legacyChannels }
-    : { lineQrImage: "", facebookUrl: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, xoGameEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels: [] };
+    ? { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, homeHeroMediaUrl: row.home_hero_media_url ?? "", homeHeroMediaType: row.home_hero_media_type === "image" || row.home_hero_media_type === "video" ? row.home_hero_media_type : "", youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, xoGameEnabled: row.xo_game_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: legacyChannels }
+    : { lineQrImage: "", facebookUrl: "", homeHeroMediaUrl: "", homeHeroMediaType: "", youtubePlaylistUrl: "", youtubeQueueEnabled: true, xoGameEnabled: true, notificationSoundUrl: "", updatedAt: "", contactChannels: [] };
 }
 
 export async function getNotificationSoundUrl(): Promise<string> {
@@ -600,6 +602,8 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
       id: 1,
       line_qr_image: settings.lineQrImage,
       facebook_url: settings.facebookUrl,
+      home_hero_media_url: settings.homeHeroMediaUrl,
+      home_hero_media_type: settings.homeHeroMediaType,
       youtube_playlist_url: settings.youtubePlaylistUrl,
       youtube_queue_enabled: settings.youtubeQueueEnabled,
       xo_game_enabled: settings.xoGameEnabled,
@@ -610,7 +614,7 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
     .single();
   if (error) throw databaseError("saveStoreSettings", error);
   const row = data as StoreSettingsRow;
-  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, xoGameEnabled: row.xo_game_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: settings.contactChannels };
+  return { lineQrImage: row.line_qr_image, facebookUrl: row.facebook_url, homeHeroMediaUrl: row.home_hero_media_url ?? "", homeHeroMediaType: row.home_hero_media_type === "image" || row.home_hero_media_type === "video" ? row.home_hero_media_type : "", youtubePlaylistUrl: row.youtube_playlist_url ?? "", youtubeQueueEnabled: row.youtube_queue_enabled ?? true, xoGameEnabled: row.xo_game_enabled ?? true, notificationSoundUrl: row.notification_sound_url ?? "", updatedAt: row.updated_at, contactChannels: settings.contactChannels };
 }
 
 function toContactChannel(row: ContactChannelRow): ContactChannel {

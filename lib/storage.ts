@@ -18,7 +18,12 @@ const allowedSoundTypes = new Map([
   ["audio/x-wav", "wav"],
   ["audio/ogg", "ogg"],
 ]);
+const allowedVideoTypes = new Map([
+  ["video/mp4", "mp4"],
+  ["video/webm", "webm"],
+]);
 const maxSoundSizeBytes = 8 * 1024 * 1024;
+const maxHeroMediaSizeBytes = 20 * 1024 * 1024;
 let bucketReady: Promise<void> | undefined;
 
 async function ensureBucket() {
@@ -26,7 +31,7 @@ async function ensureBucket() {
     const options = {
       public: true,
       fileSizeLimit: MAX_IMAGE_SIZE_BYTES,
-      allowedMimeTypes: [...allowedImageTypes.keys(), ...allowedSoundTypes.keys()],
+      allowedMimeTypes: [...allowedImageTypes.keys(), ...allowedSoundTypes.keys(), ...allowedVideoTypes.keys()],
     };
     const storage = getSupabaseAdmin().storage;
     const { error } = await storage.createBucket(bucket, options);
@@ -63,6 +68,24 @@ export async function uploadNotificationSound(file: File) {
     .upload(objectPath, await file.arrayBuffer(), { contentType: file.type, cacheControl: "31536000", upsert: false });
   if (error) throw new Error(`อัปโหลดเสียงไม่สำเร็จ: ${error.message}`);
   return getSupabaseAdmin().storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
+}
+
+export async function uploadHomeHeroMedia(file: File): Promise<{ url: string; type: "image" | "video" }> {
+  const imageExtension = allowedImageTypes.get(file.type);
+  const videoExtension = allowedVideoTypes.get(file.type);
+  const extension = imageExtension || videoExtension;
+  if (!extension) throw new Error("รองรับภาพ JPG, PNG, WebP และวิดีโอ MP4, WebM เท่านั้น");
+  if (file.size > maxHeroMediaSizeBytes) throw new Error("ไฟล์พื้นหลังต้องมีขนาดไม่เกิน 20 MB");
+  await ensureBucket();
+  const objectPath = `home-hero/${randomUUID()}.${extension}`;
+  const { error } = await getSupabaseAdmin().storage
+    .from(bucket)
+    .upload(objectPath, await file.arrayBuffer(), { contentType: file.type, cacheControl: "31536000", upsert: false });
+  if (error) throw new Error(`อัปโหลดพื้นหลังไม่สำเร็จ: ${error.message}`);
+  return {
+    url: getSupabaseAdmin().storage.from(bucket).getPublicUrl(objectPath).data.publicUrl,
+    type: videoExtension ? "video" : "image",
+  };
 }
 
 export async function removeStoreAsset(assetUrl: string) {

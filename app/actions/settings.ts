@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { getStoreSettings, removeContactChannel, saveContactChannel, saveStoreSettings } from "@/lib/store";
-import { removeImage, removeStoreAsset, uploadImage, uploadNotificationSound } from "@/lib/storage";
+import { removeImage, removeStoreAsset, uploadHomeHeroMedia, uploadImage, uploadNotificationSound } from "@/lib/storage";
+import type { StoreSettings } from "@/lib/types";
 import { normalizeYouTubePlaylistUrl } from "@/lib/youtube";
 
 export type SettingsState = { error: string; success?: string };
@@ -75,6 +76,40 @@ export async function saveXOGameVisibilityAction(
     return { error: "", success: xoGameEnabled ? "เปิดระบบมินิเกม X-O แล้ว" : "ปิดและซ่อนระบบมินิเกม X-O แล้ว" };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "บันทึกสถานะมินิเกมไม่สำเร็จ" };
+  }
+}
+
+export async function saveHomeHeroMediaAction(
+  _state: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  await requireStaff();
+  const current = await getStoreSettings();
+  const mediaFile = formData.get("homeHeroMedia");
+  const hasNewFile = mediaFile instanceof File && mediaFile.size > 0;
+  const removeMedia = formData.get("removeMedia") === "on";
+  if (!hasNewFile && !removeMedia) return { error: "กรุณาเลือกภาพหรือวิดีโอพื้นหลัง" };
+
+  let uploadedUrl = "";
+  try {
+    let homeHeroMediaUrl = removeMedia ? "" : current.homeHeroMediaUrl;
+    let homeHeroMediaType: StoreSettings["homeHeroMediaType"] = removeMedia ? "" : current.homeHeroMediaType;
+    if (hasNewFile) {
+      const uploaded = await uploadHomeHeroMedia(mediaFile);
+      uploadedUrl = uploaded.url;
+      homeHeroMediaUrl = uploaded.url;
+      homeHeroMediaType = uploaded.type;
+    }
+    await saveStoreSettings({ ...current, homeHeroMediaUrl, homeHeroMediaType, updatedAt: new Date().toISOString() });
+    if (current.homeHeroMediaUrl && current.homeHeroMediaUrl !== homeHeroMediaUrl) {
+      await removeStoreAsset(current.homeHeroMediaUrl).catch(() => undefined);
+    }
+    revalidatePath("/");
+    revalidatePath("/admin");
+    return { error: "", success: homeHeroMediaUrl ? "บันทึกพื้นหลังหน้าแรกแล้ว" : "ลบพื้นหลังและกลับไปใช้ภาพเริ่มต้นแล้ว" };
+  } catch (error) {
+    if (uploadedUrl) await removeStoreAsset(uploadedUrl).catch(() => undefined);
+    return { error: error instanceof Error ? error.message : "บันทึกพื้นหลังหน้าแรกไม่สำเร็จ" };
   }
 }
 
