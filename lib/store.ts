@@ -548,6 +548,14 @@ export async function getXOLeaderboard(): Promise<XOPlayerStats[]> {
   });
 }
 
+export async function resetXOLeaderboard(): Promise<void> {
+  const { error } = await getSupabaseAdmin()
+    .from("xo_player_stats")
+    .delete()
+    .not("user_id", "is", null);
+  if (error) throw databaseError("resetXOLeaderboard", error);
+}
+
 export async function getStoreSettings(): Promise<StoreSettings> {
   const [{ data, error }, contactChannels] = await Promise.all([
     getSupabaseAdmin()
