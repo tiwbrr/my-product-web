@@ -5,7 +5,7 @@ import Image from "next/image";
 import { ProductCard } from "@/app/ui/product-card";
 import { catalogFiltersToSearchParams, filterCatalogProducts, type CatalogFilters, type CatalogGender, type CatalogSort } from "@/lib/catalog-filters";
 import { MAX_CATALOG_PRICE } from "@/lib/product-constraints";
-import type { GameCategory, Product } from "@/lib/types";
+import type { GameCategory, GameCharacter, Product } from "@/lib/types";
 
 type PageSize = 10 | 50 | 100;
 
@@ -14,11 +14,12 @@ function priceBoundary(value: string) {
   return String(Math.min(MAX_CATALOG_PRICE, Math.max(0, Number(value))));
 }
 
-export function ProductCatalog({ products, categories, initialFilters }: { products: Product[]; categories: GameCategory[]; initialFilters: CatalogFilters }) {
+export function ProductCatalog({ products, categories, characters, initialFilters }: { products: Product[]; categories: GameCategory[]; characters: GameCharacter[]; initialFilters: CatalogFilters }) {
   const [selectedCategory, setSelectedCategory] = useState(initialFilters.category);
   const [query, setQuery] = useState(initialFilters.query);
   const [sort, setSort] = useState<CatalogSort>(initialFilters.sort);
   const [gender, setGender] = useState<CatalogGender>(initialFilters.gender);
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState(initialFilters.characterIds.filter((id) => characters.some((character) => character.id === id)));
   const [minimumPrice, setMinimumPrice] = useState(initialFilters.minimumPrice);
   const [maximumPrice, setMaximumPrice] = useState(initialFilters.maximumPrice);
   const [pageSize, setPageSize] = useState<PageSize>(10);
@@ -29,17 +30,28 @@ export function ProductCatalog({ products, categories, initialFilters }: { produ
     query,
     sort,
     gender,
+    characterIds: selectedCharacterIds,
     minimumPrice,
     maximumPrice,
-  }), [gender, maximumPrice, minimumPrice, query, selectedCategory, sort]);
+  }), [gender, maximumPrice, minimumPrice, query, selectedCategory, selectedCharacterIds, sort]);
 
   const filteredProducts = useMemo(() => filterCatalogProducts(products, activeFilters), [activeFilters, products]);
   const productSearchParams = useMemo(() => catalogFiltersToSearchParams(activeFilters), [activeFilters]);
   const pageCount = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const visibleProducts = filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const visibleCharacters = useMemo(() => selectedCategory === "all" ? characters : characters.filter((character) => character.categoryName === selectedCategory), [characters, selectedCategory]);
 
   const resetPage = () => setPage(1);
+  const selectCategory = (category: string) => {
+    setSelectedCategory(category);
+    setSelectedCharacterIds((current) => category === "all" ? current : current.filter((id) => characters.some((character) => character.id === id && character.categoryName === category)));
+    resetPage();
+  };
+  const toggleCharacter = (id: string) => {
+    setSelectedCharacterIds((current) => current.includes(id) ? current.filter((characterId) => characterId !== id) : [...current, id]);
+    resetPage();
+  };
   const goToPage = (nextPage: number) => {
     setPage(Math.min(pageCount, Math.max(1, nextPage)));
     document.getElementById("products")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -49,8 +61,8 @@ export function ProductCatalog({ products, categories, initialFilters }: { produ
     <section className="game-categories" id="categories">
       <div className="sell-section-heading"><span>เลือกเกมที่ต้องการ</span><h2>หมวดหมู่เกม</h2></div>
       <div className="round-category-list">
-        <button className={selectedCategory === "all" ? "active" : ""} onClick={() => { setSelectedCategory("all"); resetPage(); }}><i className="category-all">ALL</i><b>ทั้งหมด</b></button>
-        {categories.map((category) => <button className={selectedCategory === category.name ? "active" : ""} onClick={() => { setSelectedCategory(category.name); resetPage(); }} key={category.id}>{category.icon ? <Image src={category.icon} width={88} height={88} sizes="88px" alt="" /> : <i>{category.name.charAt(0).toUpperCase()}</i>}<b>{category.name}</b></button>)}
+        <button className={selectedCategory === "all" ? "active" : ""} onClick={() => selectCategory("all")}><i className="category-all">ALL</i><b>ทั้งหมด</b></button>
+        {categories.map((category) => <button className={selectedCategory === category.name ? "active" : ""} onClick={() => selectCategory(category.name)} key={category.id}>{category.icon ? <Image src={category.icon} width={88} height={88} sizes="88px" alt="" /> : <i>{category.name.charAt(0).toUpperCase()}</i>}<b>{category.name}</b></button>)}
       </div>
     </section>
     <section className="sell-products" id="products">
@@ -69,6 +81,10 @@ export function ProductCatalog({ products, categories, initialFilters }: { produ
           <small>บาท (0–1,000,000)</small>
         </div>
       </div>
+      {visibleCharacters.length > 0 && <fieldset className="catalog-character-filter">
+        <legend><span>กรองตัวละคร</span><small>เลือกหลายตัวเพื่อหาไอดีที่มีครบทุกตัว</small>{selectedCharacterIds.length > 0 && <button type="button" onClick={() => { setSelectedCharacterIds([]); resetPage(); }}>ล้างตัวเลือก</button>}</legend>
+        <div>{visibleCharacters.map((character) => <label className={selectedCharacterIds.includes(character.id) ? "active" : ""} key={character.id}><input type="checkbox" checked={selectedCharacterIds.includes(character.id)} onChange={() => toggleCharacter(character.id)} /><span>{character.name}</span><small>{selectedCategory === "all" ? character.categoryName : ""}</small></label>)}</div>
+      </fieldset>}
       <div className="catalog-tools">
         <label><span>⌕</span><input value={query} onChange={(event) => { setQuery(event.target.value); resetPage(); }} placeholder="ค้นหาไอดีเกม..." /></label>
         <select value={sort} onChange={(event) => { setSort(event.target.value as CatalogSort); resetPage(); }} aria-label="เรียงสินค้า"><option value="newest">ล่าสุด</option><option value="low">ราคาน้อยไปมาก</option><option value="high">ราคามากไปน้อย</option></select>

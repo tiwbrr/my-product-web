@@ -200,6 +200,7 @@ export function XOGame({ user }: { user: SafeUser }) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const botSoundSnapshotRef = useRef(".........");
   const roomSoundSnapshotRef = useRef<{ id: string; board: string; status: XOGameRoom["status"] } | null>(null);
+  const activeRoomRef = useRef<{ id: string; hostUserId: string } | null>(null);
   const botResult = useMemo(() => gameResult(botBoard, botBoardSize), [botBoard, botBoardSize]);
   const humanMark: Mark = botRound % 2 === 1 ? "X" : "O";
   const botMark = oppositeMark(humanMark);
@@ -296,6 +297,35 @@ export function XOGame({ user }: { user: SafeUser }) {
   }, [onlineMyMark, playGameSound, room]);
 
   useEffect(() => {
+    activeRoomRef.current = room && (room.hostUserId === user.id || room.guestUserId === user.id)
+      ? { id: room.id, hostUserId: room.hostUserId }
+      : null;
+  }, [room, user.id]);
+
+  useEffect(() => {
+    const leaveActiveRoom = () => {
+      const activeRoom = activeRoomRef.current;
+      if (!activeRoom) return;
+      activeRoomRef.current = null;
+      void fetch("/api/xo", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: JSON.stringify({ action: "leave", roomId: activeRoom.id }),
+        credentials: "same-origin",
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+
+    window.addEventListener("pagehide", leaveActiveRoom);
+    window.addEventListener("beforeunload", leaveActiveRoom);
+    return () => {
+      window.removeEventListener("pagehide", leaveActiveRoom);
+      window.removeEventListener("beforeunload", leaveActiveRoom);
+      leaveActiveRoom();
+    };
+  }, []);
+
+  useEffect(() => {
     if (mode !== "bot" || !botTurn || botResult) return;
     const timer = window.setTimeout(() => {
       const move = chooseBotMove(botBoard, botDifficulty, botBoardSize, botMark, humanMark);
@@ -318,15 +348,19 @@ export function XOGame({ user }: { user: SafeUser }) {
       const payload = await response.json() as { room?: XOGameRoom; error?: string };
       if (response.ok && payload.room) setRoom(payload.room);
       else if (response.status === 404 || response.status === 403) {
+        const activeRoom = activeRoomRef.current;
+        activeRoomRef.current = null;
         setRoom(null);
-        setError(payload.error || "ห้องถูกปิดแล้ว");
+        setError(activeRoom && activeRoom.hostUserId !== user.id
+          ? "ผู้สร้างห้องออกจากห้องแล้ว ห้องนี้จึงถูกปิด"
+          : payload.error || "ห้องถูกปิดแล้ว");
       }
     } catch {
       // A later polling cycle retries automatically.
     } finally {
       pollingRef.current = false;
     }
-  }, [roomId]);
+  }, [roomId, user.id]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -372,7 +406,12 @@ export function XOGame({ user }: { user: SafeUser }) {
       });
       const payload = await response.json() as { room?: XOGameRoom; error?: string; success?: boolean };
       if (!response.ok) throw new Error(payload.error || "ดำเนินการไม่สำเร็จ");
-      if (payload.room) setRoom(payload.room);
+      if (payload.room) {
+        setRoom(payload.room);
+        if (payload.room.hostUserId === user.id || payload.room.guestUserId === user.id) {
+          activeRoomRef.current = { id: payload.room.id, hostUserId: payload.room.hostUserId };
+        }
+      }
       return payload;
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "ดำเนินการไม่สำเร็จ");
@@ -396,6 +435,9 @@ export function XOGame({ user }: { user: SafeUser }) {
       const payload = await response.json() as { room?: XOGameRoom; error?: string };
       if (!response.ok || !payload.room) throw new Error(payload.error || "เปิดห้องรับชมไม่สำเร็จ");
       setRoom(payload.room);
+      if (payload.room.hostUserId === user.id || payload.room.guestUserId === user.id) {
+        activeRoomRef.current = { id: payload.room.id, hostUserId: payload.room.hostUserId };
+      }
     } catch (watchError) {
       setError(watchError instanceof Error ? watchError.message : "เปิดห้องรับชมไม่สำเร็จ");
       void refreshOpenRooms();
@@ -438,6 +480,7 @@ export function XOGame({ user }: { user: SafeUser }) {
     if (!room) return;
     const leavingRoomId = room.id;
     const isPlayer = room.hostUserId === user.id || room.guestUserId === user.id;
+    activeRoomRef.current = null;
     setRoom(null);
     if (isPlayer) await postAction({ action: "leave", roomId: leavingRoomId });
   };
@@ -528,6 +571,7 @@ export function XOGame({ user }: { user: SafeUser }) {
       <div className="xo-room-code"><span>รหัสห้อง</span><strong>{room.code}</strong><small>รอบที่ {room.roundNumber} · {room.boardSize}×{room.boardSize} · เรียง {winLength(room.boardSize)} ชนะ</small><button type="button" onClick={() => void copyCode()}>{copied ? "คัดลอกแล้ว" : "คัดลอก"}</button></div>
       <div className="xo-players"><div className={room.turn === room.hostMark && room.status === "playing" ? "active" : ""}><i className={`mark-${room.hostMark.toLowerCase()}`}>{room.hostMark}</i><span><b>{room.hostName}</b><small>ผู้สร้างห้อง{room.hostMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div><em>VS</em><div className={room.turn === guestMark && room.status === "playing" ? "active" : ""}><i className={`mark-${guestMark.toLowerCase()}`}>{guestMark}</i><span><b>{room.guestName ?? "กำลังรอ..."}</b><small>ผู้เข้าร่วม{guestMark === "X" ? " · เริ่มรอบนี้" : ""}</small></span></div></div>
       <LiveScore leftName={room.hostName} leftWins={room.hostWins} leftLosses={room.guestWins} rightName={room.guestName ?? "ผู้เข้าร่วม"} rightWins={room.guestWins} rightLosses={room.hostWins} draws={room.roomDraws} />
+      {isHost && room.lastLeftName && <p className="xo-room-departure" role="status">⚠️ <b>{room.lastLeftName}</b> ออกจากห้องแล้ว รอผู้เล่นคนใหม่เข้ามาแล้วเกมจะเริ่มใหม่</p>}
       {isSpectator && <p className="xo-spectator-note">👁 คุณกำลังรับชมเกมนี้ กระดานจะอัปเดตอัตโนมัติ</p>}
       <p className={`xo-status ${room.status !== "playing" && room.status !== "waiting" ? "finished" : ""}`}>{onlineStatus}</p>
       <Board board={board} size={room.boardSize} disabled={busy || isSpectator || !myTurn} winningLine={onlineResult?.line} onMove={(cell) => void postAction({ action: "move", roomId: room.id, cell })} />

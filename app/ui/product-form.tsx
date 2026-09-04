@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { saveProductAction, type ProductState } from "@/app/actions/products";
 import { MAX_IMAGE_SIZE_BYTES, MAX_PRODUCT_IMAGES } from "@/lib/product-constraints";
-import type { GameCategory, Product } from "@/lib/types";
+import type { GameCategory, GameCharacter, Product } from "@/lib/types";
 
 const initialState: ProductState = { error: "" };
 const MAX_IMAGE_EDGE = 2560;
@@ -28,17 +28,19 @@ async function optimizeImage(file: File) {
   return new File([blob], filename, { type: "image/webp", lastModified: file.lastModified });
 }
 
-export function ProductForm({ product, categories, compact = false }: { product?: Product; categories: GameCategory[]; compact?: boolean }) {
+export function ProductForm({ product, categories, characters, compact = false }: { product?: Product; categories: GameCategory[]; characters: GameCharacter[]; compact?: boolean }) {
   const [state, formAction, pending] = useActionState(saveProductAction, initialState);
   const [fileError, setFileError] = useState("");
   const [selectedFileCount, setSelectedFileCount] = useState(0);
   const [removedImageCount, setRemovedImageCount] = useState(0);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizationProgress, setOptimizationProgress] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(product?.category ?? categories[0]?.name ?? "");
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state.success && !product) formRef.current?.reset(); }, [state.success, product]);
 
   const availableImageSlots = MAX_PRODUCT_IMAGES - (product?.images.length ?? 0) + removedImageCount;
+  const availableCharacters = characters.filter((character) => character.categoryName === selectedCategory);
 
   async function validateImages(input: HTMLInputElement) {
     const files = Array.from(input.files ?? []);
@@ -93,12 +95,12 @@ export function ProductForm({ product, categories, compact = false }: { product?
       action={formAction}
       className={`product-form ${compact ? "product-form-compact" : ""}`}
       onSubmit={(event) => { if (optimizing) event.preventDefault(); }}
-      onReset={() => { setFileError(""); setSelectedFileCount(0); setRemovedImageCount(0); setOptimizationProgress(""); }}
+      onReset={() => { setFileError(""); setSelectedFileCount(0); setRemovedImageCount(0); setOptimizationProgress(""); setSelectedCategory(product?.category ?? categories[0]?.name ?? ""); }}
     >
       {product && <input type="hidden" name="id" value={product.id} />}
       <div className="field-row">
         <label>ชื่อไอดีหรือสินค้า<input name="name" defaultValue={product?.name} placeholder="เช่น ไอดีเริ่มต้น มีตัวละคร 5 ดาว" required /></label>
-        <label>หมวดเกม<select name="category" defaultValue={product?.category ?? categories[0]?.name ?? ""} required>{product?.category && !categories.some((category) => category.name === product.category) && <option value={product.category}>{product.category}</option>}{categories.map((category) => <option value={category.name} key={category.id}>{category.name}</option>)}</select></label>
+        <label>หมวดเกม<select name="category" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)} required>{product?.category && !categories.some((category) => category.name === product.category) && <option value={product.category}>{product.category}</option>}{categories.map((category) => <option value={category.name} key={category.id}>{category.name}</option>)}</select></label>
       </div>
       <label>รายละเอียดไอดีเกม<textarea name="description" defaultValue={product?.description} placeholder="บอกตัวละคร อาวุธ เพชร เซิร์ฟเวอร์ หรือข้อมูลสำคัญของไอดี" rows={compact ? 3 : 4} required minLength={10} /></label>
       <div className="field-row">
@@ -112,6 +114,10 @@ export function ProductForm({ product, categories, compact = false }: { product?
           <option value="female">ไอดีหลักหญิง</option>
         </select>
       </label>
+      <fieldset className="product-character-picker">
+        <legend>ตัวละครที่มีในไอดี <small>เลือกได้หลายตัว</small></legend>
+        {availableCharacters.length ? <div>{availableCharacters.map((character) => <label key={character.id}><input name="characterIds" type="checkbox" value={character.id} defaultChecked={product?.characterIds.includes(character.id)} /><span>{character.name}</span></label>)}</div> : <p>ยังไม่มีตัวละครในหมวด {selectedCategory || "ที่เลือก"} กรุณาเพิ่มจากส่วน “รายชื่อตัวละคร” ก่อน</p>}
+      </fieldset>
       {product?.images.length ? <div className="current-images"><b>รูปปัจจุบัน</b><div>{product.images.map((image, index) => <label key={image}><img src={image} alt={`${product.name} รูปที่ ${index + 1}`} /><span><input name="removeImages" type="checkbox" value={image} onChange={(event) => setRemovedImageCount((count) => count + (event.target.checked ? 1 : -1))} /> ลบรูปนี้</span></label>)}</div></div> : null}
       <label className="file-field">
         <span>รูปสินค้า <small>ต้นฉบับไม่เกิน 20 MB · ระบบย่อและแปลง WebP ให้อัตโนมัติ</small></span>

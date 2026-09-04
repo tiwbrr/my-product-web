@@ -8,6 +8,7 @@ import {
   getLobbyXOGameRooms,
   joinXOGameRoom,
   leaveXOGameRoom,
+  leaveXOGameRoomsForUser,
   playXOMove,
   requestXORematch,
 } from "@/lib/store";
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
   try {
     if (body.action === "create") {
       const boardSize = body.boardSize === 5 || body.boardSize === 10 ? body.boardSize : 3;
+      await leaveXOGameRoomsForUser(context.user.id);
       for (let attempt = 0; attempt < 5; attempt += 1) {
         try {
           const room = await createXOGameRoom(randomUUID(), roomCode(), context.user.id, boardSize);
@@ -100,6 +102,7 @@ export async function POST(request: Request) {
       if (!/^[A-Z0-9]{6}$/.test(code)) return noStore({ error: "รหัสห้องต้องมี 6 ตัวอักษร" }, { status: 400 });
       const existing = await getXOGameRoomByCode(code);
       if (!existing) return noStore({ error: "ไม่พบห้องนี้หรือห้องหมดอายุแล้ว" }, { status: 404 });
+      await leaveXOGameRoomsForUser(context.user.id, existing.id);
       await joinXOGameRoom(existing.id, context.user.id);
       return noStore({ room: await getXOGameRoom(existing.id) });
     }

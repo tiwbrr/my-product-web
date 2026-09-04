@@ -10,6 +10,7 @@ const adminSections = [
   { id: "mini-game", icon: "XO", label: "มินิเกม X-O" },
   { id: "contacts", icon: "◎", label: "ติดต่อ Playlist และเสียง" },
   { id: "categories", icon: "●", label: "หมวดเกม" },
+  { id: "characters", icon: "♟", label: "รายชื่อตัวละคร" },
   { id: "add-product", icon: "＋", label: "เพิ่มสินค้า" },
   { id: "inventory", icon: "□", label: "รายการสินค้า" },
 ] as const;

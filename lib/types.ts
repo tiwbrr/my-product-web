@@ -34,6 +34,7 @@ export type Product = {
   price: number;
   stock: number;
   accountGender: AccountGender;
+  characterIds: string[];
   images: string[];
   featured: boolean;
   createdAt: string;
@@ -73,6 +74,8 @@ export type XOGameRoom = {
   status: XOGameStatus;
   rematchHost: boolean;
   rematchGuest: boolean;
+  lastLeftName: string | null;
+  lastLeftAt: string | null;
   updatedAt: string;
 };
 
@@ -137,4 +140,14 @@ export type GameCategory = {
   name: string;
   icon: string;
   sortOrder: number;
+};
+
+export type GameCharacter = {
+  id: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
 };

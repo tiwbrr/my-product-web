@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
-import type { AccountGender, ChatMessage, ContactChannel, GameCategory, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User, XOGameRoom, XOLobbyRoom, XOPlayerStats, YouTubeQueueItem } from "@/lib/types";
+import type { AccountGender, ChatMessage, ContactChannel, GameCategory, GameCharacter, PasswordResetToken, Product, PushSubscriptionRecord, SafeUser, Session, StoreSettings, User, XOGameRoom, XOLobbyRoom, XOPlayerStats, YouTubeQueueItem } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -32,6 +32,7 @@ type ProductRow = {
   price: number | string;
   stock: number;
   account_gender?: AccountGender | null;
+  character_ids?: string[] | null;
   image: string;
   images?: string[] | null;
   featured: boolean;
@@ -86,6 +87,16 @@ type GameCategoryRow = {
   sort_order: number;
 };
 
+type GameCharacterRow = {
+  id: string;
+  name: string;
+  category_id: string;
+  sort_order: number | string;
+  created_at: string;
+  updated_at: string;
+  game_categories: { name: string } | { name: string }[] | null;
+};
+
 type XOGameRoomRow = {
   id: string;
   code: string;
@@ -102,6 +113,8 @@ type XOGameRoomRow = {
   status: XOGameRoom["status"];
   rematch_host: boolean;
   rematch_guest: boolean;
+  last_left_name: string | null;
+  last_left_at: string | null;
   updated_at: string;
   host: { name: string } | { name: string }[] | null;
   guest: { name: string } | { name: string }[] | null;
@@ -169,6 +182,7 @@ function toProduct(row: ProductRow): Product {
     price: Number(row.price),
     stock: row.stock,
     accountGender: row.account_gender === "male" || row.account_gender === "female" ? row.account_gender : "unspecified",
+    characterIds: row.character_ids ?? [],
     images: row.images?.length ? row.images : row.image ? [row.image] : [],
     featured: row.featured,
     createdAt: row.created_at,
@@ -338,6 +352,7 @@ export async function saveProduct(product: Product): Promise<Product> {
       price: product.price,
       stock: product.stock,
       account_gender: product.accountGender,
+      character_ids: product.characterIds,
       image: product.images[0] ?? "",
       images: product.images,
       featured: product.featured,
@@ -419,7 +434,7 @@ export async function completeYouTubeQueueItem(id: string): Promise<boolean> {
   return data === true;
 }
 
-const xoRoomSelect = "id, code, host_user_id, host_mark, board_size, round_number, host_wins, guest_wins, room_draws, guest_user_id, board, turn, status, rematch_host, rematch_guest, updated_at, host:store_users!xo_rooms_host_user_id_fkey(name), guest:store_users!xo_rooms_guest_user_id_fkey(name)";
+const xoRoomSelect = "id, code, host_user_id, host_mark, board_size, round_number, host_wins, guest_wins, room_draws, guest_user_id, board, turn, status, rematch_host, rematch_guest, last_left_name, last_left_at, updated_at, host:store_users!xo_rooms_host_user_id_fkey(name), guest:store_users!xo_rooms_guest_user_id_fkey(name)";
 
 function toXOGameRoom(row: XOGameRoomRow): XOGameRoom {
   const host = Array.isArray(row.host) ? row.host[0] : row.host;
@@ -442,6 +457,8 @@ function toXOGameRoom(row: XOGameRoomRow): XOGameRoom {
     status: row.status,
     rematchHost: row.rematch_host,
     rematchGuest: row.rematch_guest,
+    lastLeftName: row.last_left_name,
+    lastLeftAt: row.last_left_at,
     updatedAt: row.updated_at,
   };
 }
@@ -520,12 +537,16 @@ export async function requestXORematch(id: string, userId: string): Promise<void
 }
 
 export async function leaveXOGameRoom(id: string, userId: string): Promise<void> {
-  const { error } = await getSupabaseAdmin()
-    .from("xo_rooms")
-    .delete()
-    .eq("id", id)
-    .or(`host_user_id.eq.${userId},guest_user_id.eq.${userId}`);
+  const { error } = await getSupabaseAdmin().rpc("leave_xo_room", { p_room_id: id, p_user_id: userId });
   if (error) throw databaseError("leaveXOGameRoom", error);
+}
+
+export async function leaveXOGameRoomsForUser(userId: string, exceptRoomId?: string): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("leave_xo_rooms_for_user", {
+    p_user_id: userId,
+    p_except_room_id: exceptRoomId ?? null,
+  });
+  if (error) throw databaseError("leaveXOGameRoomsForUser", error);
 }
 
 export async function getXOLeaderboard(): Promise<XOPlayerStats[]> {
@@ -835,4 +856,54 @@ export async function removeGameCategory(id: string): Promise<GameCategory | nul
     .maybeSingle();
   if (error) throw databaseError("removeGameCategory", error);
   return data ? toGameCategory(data as GameCategoryRow) : null;
+}
+
+function toGameCharacter(row: GameCharacterRow): GameCharacter {
+  const category = Array.isArray(row.game_categories) ? row.game_categories[0] : row.game_categories;
+  return {
+    id: row.id,
+    name: row.name,
+    categoryId: row.category_id,
+    categoryName: category?.name ?? "ไม่พบหมวดเกม",
+    sortOrder: Number(row.sort_order),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const gameCharacterSelect = "id, name, category_id, sort_order, created_at, updated_at, game_categories!inner(name)";
+
+export async function getGameCharacters(): Promise<GameCharacter[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("game_characters")
+    .select(gameCharacterSelect)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (error?.code === "PGRST205" || error?.code === "42P01") return [];
+  if (error) throw databaseError("getGameCharacters", error);
+  return (data as unknown as GameCharacterRow[]).map(toGameCharacter)
+    .sort((a, b) => a.categoryName.localeCompare(b.categoryName, "th") || a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "th"));
+}
+
+export async function addGameCharacter(character: GameCharacter): Promise<GameCharacter> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("game_characters")
+    .insert({
+      id: character.id,
+      name: character.name,
+      category_id: character.categoryId,
+      sort_order: character.sortOrder,
+      created_at: character.createdAt,
+      updated_at: character.updatedAt,
+    })
+    .select(gameCharacterSelect)
+    .single();
+  if (error?.code === "23505") throw new Error("DUPLICATE_GAME_CHARACTER", { cause: error });
+  if (error) throw databaseError("addGameCharacter", error);
+  return toGameCharacter(data as unknown as GameCharacterRow);
+}
+
+export async function removeGameCharacter(id: string): Promise<void> {
+  const { error } = await getSupabaseAdmin().from("game_characters").delete().eq("id", id);
+  if (error) throw databaseError("removeGameCharacter", error);
 }

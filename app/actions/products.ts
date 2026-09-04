@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
-import { getProduct, removeProduct, saveProduct } from "@/lib/store";
+import { getGameCharacters, getProduct, removeProduct, saveProduct } from "@/lib/store";
 import { removeImage, uploadImage } from "@/lib/storage";
 import { MAX_PRODUCT_IMAGES } from "@/lib/product-constraints";
 import type { Product } from "@/lib/types";
@@ -42,6 +42,13 @@ export async function saveProductAction(
     return { error: "จำนวนสินค้าต้องมีอย่างน้อย 1 ชิ้น ห้ามบันทึกเป็น 0 ชิ้น" };
   }
 
+  const requestedCharacterIds = [...new Set(formData.getAll("characterIds").filter((value): value is string => typeof value === "string"))];
+  const availableCharacters = await getGameCharacters();
+  const validCharacterIds = new Set(availableCharacters.filter((character) => character.categoryName === category).map((character) => character.id));
+  if (requestedCharacterIds.some((id) => !validCharacterIds.has(id))) {
+    return { error: "มีตัวละครที่ไม่ถูกต้องหรือไม่อยู่ในหมวดเกมที่เลือก" };
+  }
+
   const removedImages = new Set(
     formData.getAll("removeImages").filter((value): value is string => typeof value === "string"),
   );
@@ -65,6 +72,7 @@ export async function saveProductAction(
       price,
       stock,
       accountGender,
+      characterIds: requestedCharacterIds,
       images: [...retainedImages, ...uploadedImages],
       featured: formData.get("featured") === "on",
       createdAt: existing?.createdAt ?? now,

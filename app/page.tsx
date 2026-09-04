@@ -8,7 +8,7 @@ import { HomeHeroMedia } from "@/app/ui/home-hero-media";
 import { YouTubePlaylist } from "@/app/ui/youtube-playlist";
 import { getCurrentUser } from "@/lib/auth";
 import { parseCatalogFilters, type CatalogSearchParams } from "@/lib/catalog-filters";
-import { chatPageSize, getChatMessages, getGameCategories, getProducts, getStoreSettings, getYouTubeQueue } from "@/lib/store";
+import { chatPageSize, getChatMessages, getGameCategories, getGameCharacters, getProducts, getStoreSettings, getYouTubeQueue } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +16,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<Cat
   const catalogFilters = parseCatalogFilters(await searchParams);
   const user = await getCurrentUser();
   const settings = await getStoreSettings();
-  const [products, categories, messages, youtubeQueue] = await Promise.all([
+  const [products, categories, characters, messages, youtubeQueue] = await Promise.all([
     getProducts(),
     getGameCategories(),
+    getGameCharacters(),
     user ? getChatMessages({ limit: chatPageSize + 1 }) : Promise.resolve([]),
     settings.youtubeQueueEnabled ? getYouTubeQueue() : Promise.resolve([]),
   ]);
@@ -31,7 +32,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Cat
       <div className="sell-hero-copy"><span className="sell-kicker">WELCOME TO</span><h1>KUOZO SHOP</h1><p>ร้านรวมไอดีเกม Genshin, Wuthering Wave และเกมอื่นๆ<br />เลือกดูไอดีที่ต้องการได้จากหมวดหมู่ด้านล่าง</p><a href="#categories">เลือกหมวดหมู่เกม <b>↓</b></a></div>
     </section>
     <section className="sell-notice"><b>วิธีเลือกซื้อ</b><p>กดเมนูสามขีดมุมขวาบน หรือเลือกหมวดเกมด้านล่าง จากนั้นกดไอดีที่สนใจเพื่อดูรูปและรายละเอียดทั้งหมด หากต้องการสั่งซื้อให้ติดต่อร้านผ่าน LINE หรือ Facebook</p></section>
-    <ProductCatalog products={products} categories={categories} initialFilters={catalogFilters} />
+    <ProductCatalog products={products} categories={categories} characters={characters} initialFilters={catalogFilters} />
     {settings.xoGameEnabled && <section className="xo-promo"><div><span>KUOZO MINI GAME</span><h2>เล่น X-O กับเพื่อนหรือบอท</h2><p>สร้างห้องออนไลน์ด้วยรหัส 6 ตัว หรือท้าทายบอทได้ทันทีสำหรับสมาชิก</p></div><Link href={user ? "/games/xo" : "/login?next=/games/xo"}>เริ่มเล่น X-O →</Link></section>}
     {settings.youtubeQueueEnabled && <YouTubePlaylist url={settings.youtubePlaylistUrl} user={user} initialQueue={youtubeQueue} />}
     {user ? <ChatRoom messages={messages} user={user} /> : <section className="chat-guest" id="chat"><span>MEMBER CHAT</span><h2>พูดคุยกับสมาชิกในร้าน</h2><p>สมัครสมาชิกหรือเข้าสู่ระบบเพื่ออ่านและส่งข้อความในแชท</p><div><Link href="/login" className="button button-light">เข้าสู่ระบบ</Link><Link href="/register" className="button chat-register-button">สมัครสมาชิก</Link></div></section>}
